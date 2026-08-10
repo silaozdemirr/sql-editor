@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle } from 'react-icons/fi';
 import { getSchema, getTableColumns } from '../api/schemaApi';
+import QueryResults from './QueryResults';
+const SqlEditor = lazy(() => import('./SqlEditor'));
 
 const ColumnIcon = ({ column }) => (
   column.primaryKey ? <FiKey className="schema-key" aria-label="Birincil anahtar" /> : <FiCircle className="schema-column-dot" aria-hidden="true" />
@@ -51,6 +53,9 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
   const [schema, setSchema] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [queryResult, setQueryResult] = useState(null);
+  const [queryError, setQueryError] = useState('');
+  const [isQueryRunning, setIsQueryRunning] = useState(false);
   const loadSchema = useCallback(async () => {
     setIsLoading(true); setError('');
     try { setSchema(await getSchema(connectionInfo.sessionId)); }
@@ -70,6 +75,9 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
       </section>
       <footer className="explorer-footer"><span><span className="connected-indicator" /> MySQL bağlı</span><button className="disconnect-link" type="button" onClick={onDisconnect}><FiLogOut /> Bağlantıyı kes</button></footer>
     </aside>
-    <section className="workspace-empty" aria-label="Çalışma alanı"><FiDatabase size={32} /><h2>{connectionInfo.databaseName}</h2><p>Şemayı incelemek için sol panelden bir tablo veya görünüm aç.</p><span>SQL editörü Aşama 3'te eklenecek.</span></section>
+    <section className="workspace-main">
+      <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor…</section>}><SqlEditor sessionId={connectionInfo.sessionId} onQueryResult={setQueryResult} onQueryError={setQueryError} onRunningChange={setIsQueryRunning} /></Suspense>
+      <QueryResults result={queryResult} error={queryError} isRunning={isQueryRunning} />
+    </section>
   </main>;
 }
