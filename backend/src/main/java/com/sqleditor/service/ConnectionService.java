@@ -2,6 +2,7 @@ package com.sqleditor.service;
 
 import com.sqleditor.model.ConnectionRequest;
 import com.sqleditor.model.ConnectionResponse;
+import com.sqleditor.session.SessionStore;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
@@ -16,6 +17,12 @@ import java.util.UUID;
  */
 @Service
 public class ConnectionService {
+
+    private final SessionStore sessionStore;
+
+    public ConnectionService(SessionStore sessionStore) {
+        this.sessionStore = sessionStore;
+    }
 
     /**
      * Bağlantıyı test eder: bağlanıp hemen kapar.
@@ -65,6 +72,7 @@ public class ConnectionService {
             long elapsed = System.currentTimeMillis() - startTime;
 
             String sessionId = UUID.randomUUID().toString();
+            sessionStore.save(sessionId, request);
 
             return ConnectionResponse.builder()
                     .success(true)
