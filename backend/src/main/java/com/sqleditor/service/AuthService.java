@@ -1,3 +1,109 @@
 package com.sqleditor.service;
-import com.sqleditor.model.*; import com.sqleditor.security.*; import org.springframework.beans.factory.annotation.Value; import org.springframework.dao.DuplicateKeyException; import org.springframework.jdbc.core.JdbcTemplate; import org.springframework.security.crypto.password.PasswordEncoder; import org.springframework.stereotype.Service; import java.security.SecureRandom; import java.sql.Timestamp; import java.time.*; import java.util.*;
-@Service public class AuthService { private final JdbcTemplate db; private final PasswordEncoder passwords; private final JwtService jwt; private final TokenHasher hash; private final int refreshDays; private final SecureRandom random=new SecureRandom(); public AuthService(JdbcTemplate db,PasswordEncoder p,JwtService j,TokenHasher h,@Value("${app.jwt.refresh-token-days}") int d){this.db=db;passwords=p;jwt=j;hash=h;refreshDays=d;} public AuthResponse register(AuthRequest r){String email=email(r.getEmail()),id=UUID.randomUUID().toString(),name=name(r);try{db.update("insert into app_users(id,email,display_name,password_hash) values(?,?,?,?)",id,email,name,passwords.encode(r.getPassword()));}catch(DuplicateKeyException e){throw new IllegalArgumentException("Bu e-posta zaten kayıtlı.");}return new AuthResponse(jwt.createAccessToken(id,email),email,name);} public AuthResponse login(AuthRequest r){User u=find(email(r.getEmail()));if(u==null||!passwords.matches(r.getPassword(),u.hash))throw new IllegalArgumentException("E-posta veya parola hatalı.");return response(u);} public String issueRefresh(String email){User u=find(email(email));String raw=raw();db.update("insert into refresh_tokens(id,user_id,token_hash,expires_at) values(?,?,?,?)",UUID.randomUUID().toString(),u.id,hash.hash(raw),Timestamp.from(Instant.now().plus(Duration.ofDays(refreshDays))));return raw;} public AuthResponse refresh(String raw){List<User> u=db.query("select u.id,u.email,u.display_name,u.password_hash from refresh_tokens t join app_users u on u.id=t.user_id where t.token_hash=? and t.revoked_at is null and t.expires_at > current_timestamp",(rs,n)->new User(rs.getString(1),rs.getString(2),rs.getString(3),rs.getString(4)),hash.hash(raw));if(u.isEmpty())throw new IllegalArgumentException("Oturum yenileme tokenı geçersiz.");db.update("update refresh_tokens set revoked_at=current_timestamp where token_hash=?",hash.hash(raw));return response(u.get(0));} public void revoke(String raw){db.update("update refresh_tokens set revoked_at=current_timestamp where token_hash=?",hash.hash(raw));} private User find(String e){List<User> u=db.query("select id,email,display_name,password_hash from app_users where email=?",(rs,n)->new User(rs.getString(1),rs.getString(2),rs.getString(3),rs.getString(4)),e);return u.isEmpty()?null:u.get(0);} private AuthResponse response(User u){return new AuthResponse(jwt.createAccessToken(u.id,u.email),u.email,u.name);} private String email(String e){return e.trim().toLowerCase(Locale.ROOT);} private String name(AuthRequest r){return r.getDisplayName()==null||r.getDisplayName().isBlank()?r.getEmail().trim():r.getDisplayName().trim();} private String raw(){byte[] b=new byte[48];random.nextBytes(b);return Base64.getUrlEncoder().withoutPadding().encodeToString(b);} private record User(String id,String email,String name,String hash){} }
+
+import com.sqleditor.model.AppRole;
+import com.sqleditor.model.AuthRequest;
+import com.sqleditor.model.AuthResponse;
+import com.sqleditor.security.JwtService;
+import com.sqleditor.security.TokenHasher;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+import java.security.SecureRandom;
+import java.sql.Timestamp;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
+import java.util.UUID;
+
+@Service
+public class AuthService {
+    private final JdbcTemplate db;
+    private final PasswordEncoder passwords;
+    private final JwtService jwt;
+    private final TokenHasher hash;
+    private final int refreshDays;
+    private final SecureRandom random = new SecureRandom();
+
+    public AuthService(JdbcTemplate db, PasswordEncoder passwords, JwtService jwt, TokenHasher hash,
+                       @Value("${app.jwt.refresh-token-days}") int refreshDays) {
+        this.db = db;
+        this.passwords = passwords;
+        this.jwt = jwt;
+        this.hash = hash;
+        this.refreshDays = refreshDays;
+    }
+
+    public AuthResponse register(AuthRequest request) {
+        String email = email(request.getEmail());
+        String name = displayName(request);
+        String id = UUID.randomUUID().toString();
+        try {
+            db.update("insert into app_users(id,email,display_name,password_hash,role_name) values(?,?,?,?,?)",
+                    id, email, name, passwords.encode(request.getPassword()), AppRole.EDITOR.name());
+        } catch (DuplicateKeyException exception) {
+            throw new IllegalArgumentException("Bu e-posta zaten kayıtlı.");
+        }
+        return response(new User(id, email, name, AppRole.EDITOR, null));
+    }
+
+    public AuthResponse login(AuthRequest request) {
+        User user = find(email(request.getEmail()));
+        if (user == null || !passwords.matches(request.getPassword(), user.passwordHash())) {
+            throw new IllegalArgumentException("E-posta veya parola hatalı.");
+        }
+        return response(user);
+    }
+
+    public String issueRefresh(String email) {
+        User user = find(email(email));
+        String raw = rawToken();
+        db.update("insert into refresh_tokens(id,user_id,token_hash,expires_at) values(?,?,?,?)",
+                UUID.randomUUID().toString(), user.id(), hash.hash(raw),
+                Timestamp.from(Instant.now().plus(Duration.ofDays(refreshDays))));
+        return raw;
+    }
+
+    public AuthResponse refresh(String raw) {
+        List<User> users = db.query("""
+                select u.id,u.email,u.display_name,u.role_name,u.password_hash
+                from refresh_tokens t join app_users u on u.id=t.user_id
+                where t.token_hash=? and t.revoked_at is null and t.expires_at > current_timestamp
+                """, (rs, rowNum) -> new User(rs.getString(1), rs.getString(2), rs.getString(3),
+                AppRole.valueOf(rs.getString(4)), rs.getString(5)), hash.hash(raw));
+        if (users.isEmpty()) throw new IllegalArgumentException("Oturum yenileme tokenı geçersiz.");
+        db.update("update refresh_tokens set revoked_at=current_timestamp where token_hash=?", hash.hash(raw));
+        return response(users.get(0));
+    }
+
+    public void revoke(String raw) {
+        db.update("update refresh_tokens set revoked_at=current_timestamp where token_hash=?", hash.hash(raw));
+    }
+
+    private User find(String email) {
+        List<User> users = db.query("select id,email,display_name,role_name,password_hash from app_users where email=?",
+                (rs, rowNum) -> new User(rs.getString(1), rs.getString(2), rs.getString(3),
+                        AppRole.valueOf(rs.getString(4)), rs.getString(5)), email);
+        return users.isEmpty() ? null : users.get(0);
+    }
+
+    private AuthResponse response(User user) {
+        return new AuthResponse(jwt.createAccessToken(user.id(), user.email(), user.role().name()),
+                user.email(), user.name(), user.role().name());
+    }
+
+    private String email(String value) { return value.trim().toLowerCase(Locale.ROOT); }
+    private String displayName(AuthRequest request) {
+        return request.getDisplayName() == null || request.getDisplayName().isBlank()
+                ? request.getEmail().trim() : request.getDisplayName().trim();
+    }
+    private String rawToken() {
+        byte[] bytes = new byte[48]; random.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+    private record User(String id, String email, String name, AppRole role, String passwordHash) { }
+}

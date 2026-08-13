@@ -21,10 +21,10 @@ public class JwtService {
         if (secret == null || secret.length() < 32 || secret.startsWith("replace-this")) throw new IllegalStateException("JWT_SECRET en az 32 karakter olmalıdır.");
         this.secret = secret.getBytes(StandardCharsets.UTF_8); this.accessSeconds = minutes * 60; this.mapper = mapper;
     }
-    public String createAccessToken(String userId, String email) {
+    public String createAccessToken(String userId, String email, String role) {
         try {
             String head = enc(mapper.writeValueAsBytes(Map.of("alg", "HS256", "typ", "JWT")));
-            String body = enc(mapper.writeValueAsBytes(Map.of("sub", userId, "email", email, "iat", Instant.now().getEpochSecond(), "exp", Instant.now().plusSeconds(accessSeconds).getEpochSecond())));
+            String body = enc(mapper.writeValueAsBytes(Map.of("sub", userId, "email", email, "role", role, "iat", Instant.now().getEpochSecond(), "exp", Instant.now().plusSeconds(accessSeconds).getEpochSecond())));
             return head + "." + body + "." + enc(sign(head + "." + body));
         } catch (Exception e) { throw new IllegalStateException("Token oluşturulamadı", e); }
     }

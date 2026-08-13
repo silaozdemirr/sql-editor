@@ -193,6 +193,18 @@ body {
 
 .logout-button:hover { color: var(--error); border-color: var(--error); }
 
+.saved-connections { margin-top: 1.25rem; border-top: 1px solid var(--border-subtle); padding-top: 1rem; }
+.saved-connections-heading { display: flex; justify-content: space-between; align-items: center; color: var(--text-secondary); font-size: .78rem; font-weight: 600; }
+.refresh-saved, .saved-delete { border: 0; background: transparent; color: var(--text-muted); cursor: pointer; }
+.refresh-saved:hover { color: var(--accent-blue); }
+.saved-error { color: var(--error); font-size: .75rem; margin: .6rem 0; }
+.saved-empty { color: var(--text-muted); font-size: .75rem; margin: .7rem 0 0; }
+.saved-connection { display: flex; align-items: center; gap: .5rem; margin-top: .55rem; padding: .55rem .65rem; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); }
+.saved-connect { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text-primary); text-align: left; cursor: pointer; }
+.saved-connect strong, .saved-connect small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.saved-connect strong { font-size: .8rem; }.saved-connect small { margin-top: .15rem; color: var(--text-muted); font-size: .7rem; }
+.saved-delete:hover { color: var(--error); }
+
 /* =============================================
    CONNECTION CARD
    ============================================= */

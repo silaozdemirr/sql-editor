@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FiDatabase, FiServer, FiUser, FiLock, FiEye, FiEyeOff,
   FiCheckCircle, FiAlertCircle, FiLoader, FiWifi, FiZap,
-  FiInfo, FiLogOut
+  FiInfo, FiLogOut, FiSave, FiTrash2
 } from 'react-icons/fi';
 import { SiMysql } from 'react-icons/si';
-import { testConnection, connectToDatabase } from '../api/connectionApi';
+import { testConnection, connectToDatabase, connectSavedConnection, deleteSavedConnection, getSavedConnections, saveConnection } from '../api/connectionApi';
 
 // Veritabanı tip konfigürasyonları
 const DB_TYPES = [
@@ -45,6 +45,8 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
   const [testResult, setTestResult] = useState(null);
   const [isConnecting, setIsConnecting] = useState(false);
   const [isTesting, setIsTesting] = useState(false);
+  const [savedConnections, setSavedConnections] = useState([]);
+  const [savedError, setSavedError] = useState('');
 
   const currentDb = DB_TYPES.find(d => d.key === selectedDb);
 
@@ -57,6 +59,13 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
     dbType: 'MYSQL',
     connectionName: '',
   });
+
+  const loadSavedConnections = async () => {
+    try { setSavedConnections(await getSavedConnections()); }
+    catch { setSavedError('Kayıtlı bağlantılar yüklenemedi.'); }
+  };
+
+  useEffect(() => { loadSavedConnections(); }, []);
 
   const handleDbChange = (db) => {
     if (db.disabled) return;
@@ -141,6 +150,36 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const handleSave = async () => {
+    if (!form.connectionName.trim()) {
+      setSavedError('Kaydetmek için bir bağlantı adı girin.');
+      return;
+    }
+    try {
+      setSavedError('');
+      await saveConnection({ ...form, port: parseInt(form.port, 10) });
+      await loadSavedConnections();
+    } catch (err) {
+      setSavedError(err.response?.data?.message || 'Bağlantı kaydedilemedi. Aynı isim zaten kullanılıyor olabilir.');
+    }
+  };
+
+  const handleSavedConnect = async (id) => {
+    setIsConnecting(true);
+    try {
+      const result = await connectSavedConnection(id);
+      if (result.success) onConnected(result);
+      else setSavedError(result.message || 'Bağlantı kurulamadı.');
+    } catch (err) {
+      setSavedError(err.response?.data?.message || 'Kayıtlı bağlantı kurulamadı.');
+    } finally { setIsConnecting(false); }
+  };
+
+  const handleDeleteSaved = async (id) => {
+    try { await deleteSavedConnection(id); await loadSavedConnections(); }
+    catch (err) { setSavedError(err.response?.data?.message || 'Kayıtlı bağlantı silinemedi.'); }
   };
 
   const isLoading = isTesting || isConnecting;
@@ -279,6 +318,14 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
             <span>Kimlik Bilgileri</span>
           </div>
 
+          <div className="form-row single">
+            <div className="form-group">
+              <label className="form-label" htmlFor="connectionName">Bağlantı Adı</label>
+              <input id="connectionName" name="connectionName" type="text" className="form-input"
+                value={form.connectionName} onChange={handleChange} placeholder="Örn. Üretim MySQL" disabled={isLoading} maxLength="100" />
+            </div>
+          </div>
+
           {/* Username */}
           <div className="form-row single">
             <div className="form-group">
@@ -371,6 +418,10 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
               )}
             </button>
 
+            <button type="button" className="btn btn-secondary" onClick={handleSave} disabled={isLoading} title="Bağlantıyı güvenle kaydet">
+              <FiSave /> Kaydet
+            </button>
+
             <button
               id="btn-connect"
               type="button"
@@ -385,6 +436,18 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
               )}
             </button>
           </div>
+
+          <section className="saved-connections" aria-label="Kayıtlı bağlantılar">
+            <div className="saved-connections-heading"><span>Kayıtlı Bağlantılar</span><button type="button" className="refresh-saved" onClick={loadSavedConnections}>Yenile</button></div>
+            {savedError && <p className="saved-error">{savedError}</p>}
+            {!savedError && savedConnections.length === 0 && <p className="saved-empty">Henüz kayıtlı bağlantı yok.</p>}
+            {savedConnections.map((connection) => <div className="saved-connection" key={connection.id}>
+              <button type="button" className="saved-connect" onClick={() => handleSavedConnect(connection.id)} disabled={isLoading}>
+                <strong>{connection.connectionName}</strong><small>{connection.host}:{connection.port} · {connection.databaseName}</small>
+              </button>
+              <button type="button" className="saved-delete" onClick={() => handleDeleteSaved(connection.id)} aria-label={`${connection.connectionName} bağlantısını sil`} title="Bağlantıyı sil"><FiTrash2 /></button>
+            </div>)}
+          </section>
         </div>
 
         {/* Card Footer */}

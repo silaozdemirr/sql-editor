@@ -47,8 +47,6 @@ Kontrol et: `docker ps` → `sqleditor-mysql` çalışıyor olmalı
 
 ```bash
 cd SQLeditör/backend
-set JWT_SECRET=buraya-en-az-32-karakter-rastgele-bir-deger
-set CREDENTIAL_ENCRYPTION_KEY=32-byte-base64-aes-anahtari
 .\mvnw.cmd spring-boot:run
 ```
 

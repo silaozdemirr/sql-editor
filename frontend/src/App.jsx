@@ -2,7 +2,7 @@ import { useState } from 'react';
 import ConnectionPanel from './components/ConnectionPanel';
 import SchemaExplorer from './components/SchemaExplorer';
 import './index.css';
-import { login, register, logout } from './api/connectionApi';
+import { disconnectDatabase, login, register, logout } from './api/connectionApi';
 
 function AuthPanel({ onAuthenticated }) {
   const [isRegister, setIsRegister] = useState(false);
@@ -20,11 +20,14 @@ function App() {
     setConnectionInfo(info);
   };
 
-  const handleDisconnect = () => {
+  const handleDisconnect = async () => {
+    if (connectionInfo?.connectionToken) {
+      try { await disconnectDatabase(connectionInfo.connectionToken); } catch { /* Oturum süresi dolmuş olabilir. */ }
+    }
     setConnectionInfo(null);
   };
 
-  const handleLogout = async () => { await logout(); sessionStorage.removeItem('accessToken'); setConnectionInfo(null); setAuthenticated(false); };
+  const handleLogout = async () => { if (connectionInfo?.connectionToken) await handleDisconnect(); await logout(); sessionStorage.removeItem('accessToken'); setConnectionInfo(null); setAuthenticated(false); };
 
   if (!authenticated) return <AuthPanel onAuthenticated={() => setAuthenticated(true)} />;
 

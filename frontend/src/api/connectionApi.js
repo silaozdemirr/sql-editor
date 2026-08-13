@@ -35,6 +35,14 @@ export const connectToDatabase = async (connectionData) => {
   return response.data;
 };
 
+export const saveConnection = async (connectionData) => api.post('/connections/saved', connectionData);
+export const getSavedConnections = async () => (await api.get('/connections/saved')).data;
+export const connectSavedConnection = async (id) => (await api.post(`/connections/saved/${id}/connect`)).data;
+export const deleteSavedConnection = async (id) => api.delete(`/connections/saved/${id}`);
+export const disconnectDatabase = async (connectionToken) => api.delete('/connection/session', {
+  headers: { 'X-Connection-Token': connectionToken },
+});
+
 export const register = async (data) => (await api.post('/auth/register', data)).data;
 export const login = async (data) => (await api.post('/auth/login', data)).data;
 export const logout = async () => api.post('/auth/logout');

@@ -1,2 +1,2 @@
 package com.sqleditor.model;
-public record AuthResponse(String accessToken, String email, String displayName) {}
+public record AuthResponse(String accessToken, String email, String displayName, String role) {}

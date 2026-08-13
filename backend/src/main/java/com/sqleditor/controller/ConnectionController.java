@@ -45,6 +45,14 @@ public class ConnectionController {
         return ResponseEntity.ok(response);
     }
 
+    @DeleteMapping("/session")
+    public ResponseEntity<Void> disconnect(
+            @RequestHeader("X-Connection-Token") String token,
+            org.springframework.security.core.Authentication authentication) {
+        connectionService.disconnect(authentication.getName(), token);
+        return ResponseEntity.noContent().build();
+    }
+
     /**
      * Health check endpoint.
      */

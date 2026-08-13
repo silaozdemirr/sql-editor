@@ -93,6 +93,10 @@ public class ConnectionService {
         }
     }
 
+    public void disconnect(String userId, String connectionToken) {
+        sessions.close(userId, connectionToken);
+    }
+
     /**
      * Veritabanı tipine göre JDBC URL oluşturur.
      */
