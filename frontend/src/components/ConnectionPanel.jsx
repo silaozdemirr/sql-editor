@@ -37,7 +37,7 @@ const DB_TYPES = [
   },
 ];
 
-const ConnectionPanel = ({ onConnected }) => {
+const ConnectionPanel = ({ onConnected, onLogout }) => {
   const [selectedDb, setSelectedDb] = useState('MYSQL');
   const [showPassword, setShowPassword] = useState(false);
   const [testStatus, setTestStatus] = useState(null); // null | 'testing' | 'success' | 'error'
@@ -154,6 +154,9 @@ const ConnectionPanel = ({ onConnected }) => {
           <span className="logo-title">SQLEditör</span>
         </div>
         <p className="logo-subtitle">Kendi veritabanı yönetim aracın</p>
+        <button className="logout-button" type="button" onClick={onLogout}>
+          <FiLogOut /> Çıkış yap
+        </button>
       </div>
 
       {/* Connection Card */}

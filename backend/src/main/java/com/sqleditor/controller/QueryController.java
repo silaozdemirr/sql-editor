@@ -1,10 +1,9 @@
 package com.sqleditor.controller;
 
-import com.sqleditor.model.ConnectionRequest;
 import com.sqleditor.model.QueryRequest;
 import com.sqleditor.model.QueryResponse;
 import com.sqleditor.service.QueryService;
-import com.sqleditor.session.SessionStore;
+import com.sqleditor.service.ConnectionSessionService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,23 +22,18 @@ import java.sql.SQLException;
 public class QueryController {
 
     private final QueryService queryService;
-    private final SessionStore sessionStore;
+    private final ConnectionSessionService sessions;
 
-    public QueryController(QueryService queryService, SessionStore sessionStore) {
+    public QueryController(QueryService queryService, ConnectionSessionService sessions) {
         this.queryService = queryService;
-        this.sessionStore = sessionStore;
+        this.sessions = sessions;
     }
 
     @PostMapping("/execute")
-    public ResponseEntity<QueryResponse> execute(@Valid @RequestBody QueryRequest request) {
-        ConnectionRequest connection = sessionStore.get(request.getSessionId());
-        if (connection == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Oturum bulunamadı veya süresi doldu. Lütfen yeniden bağlanın.");
-        }
+    public ResponseEntity<QueryResponse> execute(@Valid @RequestBody QueryRequest request, @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, org.springframework.security.core.Authentication auth) {
         try {
-            return ResponseEntity.ok(queryService.execute(connection, request.getSql()));
-        } catch (SQLException exception) {
+            return ResponseEntity.ok(queryService.execute(sessions.get(auth.getName(), token), request.getSql()));
+        } catch (SQLException | SecurityException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Sorgu çalıştırılamadı: " + exception.getMessage(), exception);
         }

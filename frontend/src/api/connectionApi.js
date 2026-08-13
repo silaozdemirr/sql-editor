@@ -8,6 +8,13 @@ const api = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 15000,
+  withCredentials: true,
+});
+
+api.interceptors.request.use((config) => {
+  const token = sessionStorage.getItem('accessToken');
+  if (token) config.headers.Authorization = `Bearer ${token}`;
+  return config;
 });
 
 /**
@@ -27,6 +34,10 @@ export const connectToDatabase = async (connectionData) => {
   const response = await api.post('/connection/connect', connectionData);
   return response.data;
 };
+
+export const register = async (data) => (await api.post('/auth/register', data)).data;
+export const login = async (data) => (await api.post('/auth/login', data)).data;
+export const logout = async () => api.post('/auth/logout');
 
 /**
  * Backend health check

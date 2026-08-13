@@ -1,6 +1,5 @@
 package com.sqleditor.service;
 
-import com.sqleditor.model.ConnectionRequest;
 import com.sqleditor.model.QueryResponse;
 import org.springframework.stereotype.Service;
 
@@ -21,10 +20,9 @@ public class QueryService {
     private static final int MAX_ROWS = 1_000;
 
     /** Bağlı veritabanında tek SQL ifadesi çalıştırır. Sonuç satırları 1000 ile sınırlıdır. */
-    public QueryResponse execute(ConnectionRequest request, String sql) throws SQLException {
+    public QueryResponse execute(Connection connection, String sql) throws SQLException {
         long start = System.currentTimeMillis();
-        try (Connection connection = DriverManager.getConnection(buildJdbcUrl(request), request.getUsername(), request.getPassword());
-             Statement statement = connection.createStatement()) {
+        try (connection; Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(30);
             statement.setMaxRows(MAX_ROWS + 1);
 
@@ -71,14 +69,4 @@ public class QueryService {
         return String.valueOf(value);
     }
 
-    private String buildJdbcUrl(ConnectionRequest request) {
-        return switch (request.getDbType().toUpperCase()) {
-            case "MYSQL" -> String.format(
-                    "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8",
-                    request.getHost(), request.getPort(), request.getDatabase());
-            case "POSTGRESQL" -> String.format("jdbc:postgresql://%s:%d/%s",
-                    request.getHost(), request.getPort(), request.getDatabase());
-            default -> throw new IllegalArgumentException("Desteklenmeyen tip: " + request.getDbType());
-        };
-    }
 }

@@ -8,7 +8,7 @@ const ColumnIcon = ({ column }) => (
   column.primaryKey ? <FiKey className="schema-key" aria-label="Birincil anahtar" /> : <FiCircle className="schema-column-dot" aria-hidden="true" />
 );
 
-function SchemaItem({ item, sessionId, icon: Icon }) {
+function SchemaItem({ item, connectionToken, icon: Icon }) {
   const [isOpen, setIsOpen] = useState(false);
   const [columns, setColumns] = useState(null);
   const [error, setError] = useState('');
@@ -17,7 +17,7 @@ function SchemaItem({ item, sessionId, icon: Icon }) {
     setIsOpen(nextOpen);
     if (!nextOpen || columns) return;
     setError('');
-    try { setColumns(await getTableColumns(sessionId, item.name)); }
+    try { setColumns(await getTableColumns(connectionToken, item.name)); }
     catch (requestError) { setError(requestError.response?.data?.message || 'Kolonlar yüklenemedi.'); }
   };
   return <li className="schema-item">
@@ -37,7 +37,7 @@ function SchemaItem({ item, sessionId, icon: Icon }) {
   </li>;
 }
 
-function SchemaGroup({ title, items, sessionId, icon }) {
+function SchemaGroup({ title, items, connectionToken, icon }) {
   const [isOpen, setIsOpen] = useState(true);
   const Icon = icon;
   return <li className="schema-group">
@@ -45,7 +45,7 @@ function SchemaGroup({ title, items, sessionId, icon }) {
       {isOpen ? <FiChevronDown /> : <FiChevronRight />}<Icon className="schema-group-icon" />
       <span className="tree-label">{title}</span><span className="tree-count">{items.length}</span>
     </button>
-    {isOpen && <ul className="schema-list">{items.map((item) => <SchemaItem key={item.name} item={item} sessionId={sessionId} icon={title === 'Tablolar' ? FiTable : FiLayers} />)}</ul>}
+    {isOpen && <ul className="schema-list">{items.map((item) => <SchemaItem key={item.name} item={item} connectionToken={connectionToken} icon={title === 'Tablolar' ? FiTable : FiLayers} />)}</ul>}
   </li>;
 }
 
@@ -58,10 +58,10 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
   const [isQueryRunning, setIsQueryRunning] = useState(false);
   const loadSchema = useCallback(async () => {
     setIsLoading(true); setError('');
-    try { setSchema(await getSchema(connectionInfo.sessionId)); }
+    try { setSchema(await getSchema(connectionInfo.connectionToken)); }
     catch (requestError) { setError(requestError.response?.data?.message || 'Şema bilgisi alınamadı.'); }
     finally { setIsLoading(false); }
-  }, [connectionInfo.sessionId]);
+  }, [connectionInfo.connectionToken]);
   useEffect(() => { loadSchema(); }, [loadSchema]);
   return <main className="workspace">
     <aside className="schema-explorer" aria-label="Şema gezgini">
@@ -71,12 +71,12 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
       <section className="connection-tree"><div className="tree-row database-row"><FiChevronDown /><FiDatabase className="database-icon" /><span className="tree-label">{schema?.databaseName || connectionInfo.databaseName}</span><span className="connected-indicator" title="Bağlı" /></div>
         {isLoading && <p className="schema-state">Şema yükleniyor…</p>}
         {error && <div className="schema-state error-state"><FiAlertCircle /><span>{error}</span><button type="button" onClick={loadSchema}>Tekrar dene</button></div>}
-        {schema && !isLoading && !error && <ul className="schema-list root-list"><SchemaGroup title="Tablolar" items={schema.tables || []} sessionId={connectionInfo.sessionId} icon={FiTable} /><SchemaGroup title="Görünümler" items={schema.views || []} sessionId={connectionInfo.sessionId} icon={FiLayers} /></ul>}
+        {schema && !isLoading && !error && <ul className="schema-list root-list"><SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} icon={FiTable} /><SchemaGroup title="Görünümler" items={schema.views || []} connectionToken={connectionInfo.connectionToken} icon={FiLayers} /></ul>}
       </section>
       <footer className="explorer-footer"><span><span className="connected-indicator" /> MySQL bağlı</span><button className="disconnect-link" type="button" onClick={onDisconnect}><FiLogOut /> Bağlantıyı kes</button></footer>
     </aside>
     <section className="workspace-main">
-      <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor…</section>}><SqlEditor sessionId={connectionInfo.sessionId} onQueryResult={setQueryResult} onQueryError={setQueryError} onRunningChange={setIsQueryRunning} /></Suspense>
+      <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor…</section>}><SqlEditor connectionToken={connectionInfo.connectionToken} onQueryResult={setQueryResult} onQueryError={setQueryError} onRunningChange={setIsQueryRunning} /></Suspense>
       <QueryResults result={queryResult} error={queryError} isRunning={isQueryRunning} />
     </section>
   </main>;

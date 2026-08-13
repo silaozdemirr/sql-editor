@@ -47,8 +47,18 @@ Kontrol et: `docker ps` → `sqleditor-mysql` çalışıyor olmalı
 
 ```bash
 cd SQLeditör/backend
+set JWT_SECRET=buraya-en-az-32-karakter-rastgele-bir-deger
+set CREDENTIAL_ENCRYPTION_KEY=32-byte-base64-aes-anahtari
 .\mvnw.cmd spring-boot:run
 ```
+
+PowerShell'de AES anahtarı üretmek için:
+
+```powershell
+[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
+```
+
+İlk Docker kurulumundan önce `docker compose up -d` çalıştırılırsa uygulama veritabanı (`sqleditor_app`) otomatik oluşur. Mevcut MySQL volume'ü olan kurulumda bu veritabanını bir kez oluşturmak için `docker/mysql/init.sql` içindeki ilk dört SQL satırını MySQL üzerinde çalıştırın; mevcut `okul_db` veriniz silinmez.
 
 Test: http://localhost:8080/api/connection/health
 
@@ -72,6 +82,12 @@ Aç: http://localhost:5173
 | GET | `/api/connection/health` | Backend durumu |
 | POST | `/api/connection/test` | Bağlantı testi |
 | POST | `/api/connection/connect` | Bağlantı kur |
+| POST | `/api/auth/register` | Kullanıcı kaydı |
+| POST | `/api/auth/login` | Giriş |
+| POST | `/api/auth/logout` | Çıkış |
+| GET | `/api/connections` | Giriş yapan kullanıcının bağlantı geçmişi |
+
+Tüm bağlantı, şema ve sorgu uçları `Authorization: Bearer <access-token>` ister. Bağlantı tokenı yalnızca `X-Connection-Token` başlığında gönderilir.
 
 ### Örnek Request
 ```json

@@ -2,14 +2,12 @@ package com.sqleditor.service;
 
 import com.sqleditor.model.ConnectionRequest;
 import com.sqleditor.model.ConnectionResponse;
-import com.sqleditor.session.SessionStore;
 import org.springframework.stereotype.Service;
 
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.util.UUID;
 
 /**
  * Veritabanı bağlantı servisi.
@@ -18,10 +16,10 @@ import java.util.UUID;
 @Service
 public class ConnectionService {
 
-    private final SessionStore sessionStore;
+    private final ConnectionSessionService sessions;
 
-    public ConnectionService(SessionStore sessionStore) {
-        this.sessionStore = sessionStore;
+    public ConnectionService(ConnectionSessionService sessions) {
+        this.sessions = sessions;
     }
 
     /**
@@ -52,7 +50,6 @@ public class ConnectionService {
             return ConnectionResponse.builder()
                     .success(false)
                     .message("Bağlantı hatası: " + getFriendlyErrorMessage(e))
-                    .errorDetail(e.getMessage())
                     .responseTimeMs(elapsed)
                     .build();
         }
@@ -63,7 +60,7 @@ public class ConnectionService {
      * "Connect" butonuna karşılık gelir.
      * (Şu an test ile aynı, ileride connection pool eklenecek)
      */
-    public ConnectionResponse connect(ConnectionRequest request) {
+    public ConnectionResponse connect(String userId, ConnectionRequest request) {
         long startTime = System.currentTimeMillis();
         String jdbcUrl = buildJdbcUrl(request);
 
@@ -71,12 +68,12 @@ public class ConnectionService {
             DatabaseMetaData meta = conn.getMetaData();
             long elapsed = System.currentTimeMillis() - startTime;
 
-            String sessionId = UUID.randomUUID().toString();
-            sessionStore.save(sessionId, request);
+            String connectionToken = sessions.create(userId, request);
+            sessions.history(userId, request);
 
             return ConnectionResponse.builder()
                     .success(true)
-                    .sessionId(sessionId)
+                    .connectionToken(connectionToken)
                     .serverVersion(meta.getDatabaseProductName() + " " + meta.getDatabaseProductVersion())
                     .databaseName(conn.getCatalog())
                     .host(request.getHost())
@@ -91,7 +88,6 @@ public class ConnectionService {
             return ConnectionResponse.builder()
                     .success(false)
                     .message("Bağlantı hatası: " + getFriendlyErrorMessage(e))
-                    .errorDetail(e.getMessage())
                     .responseTimeMs(elapsed)
                     .build();
         }

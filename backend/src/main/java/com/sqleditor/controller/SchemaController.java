@@ -1,10 +1,9 @@
 package com.sqleditor.controller;
 
 import com.sqleditor.model.ColumnInfo;
-import com.sqleditor.model.ConnectionRequest;
 import com.sqleditor.model.SchemaResponse;
 import com.sqleditor.service.SchemaService;
-import com.sqleditor.session.SessionStore;
+import com.sqleditor.service.ConnectionSessionService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
@@ -29,11 +28,11 @@ import java.util.List;
 public class SchemaController {
 
     private final SchemaService schemaService;
-    private final SessionStore sessionStore;
+    private final ConnectionSessionService sessions;
 
-    public SchemaController(SchemaService schemaService, SessionStore sessionStore) {
+    public SchemaController(SchemaService schemaService, ConnectionSessionService sessions) {
         this.schemaService = schemaService;
-        this.sessionStore = sessionStore;
+        this.sessions = sessions;
     }
 
     /**
@@ -41,10 +40,11 @@ public class SchemaController {
      * GET /api/schema?sessionId={sessionId}
      */
     @GetMapping
-    public ResponseEntity<SchemaResponse> getSchema(@RequestParam String sessionId) {
+    public ResponseEntity<SchemaResponse> getSchema(@org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, org.springframework.security.core.Authentication auth) {
         try {
-            return ResponseEntity.ok(schemaService.getSchema(getSession(sessionId)));
-        } catch (SQLException e) {
+            java.sql.Connection c = sessions.get(auth.getName(), token);
+            return ResponseEntity.ok(schemaService.getSchema(c, c.getCatalog()));
+        } catch (SQLException | SecurityException e) {
             throw databaseError(e);
         }
     }
@@ -55,25 +55,18 @@ public class SchemaController {
      */
     @GetMapping("/{tableName}/columns")
     public ResponseEntity<List<ColumnInfo>> getColumns(
-            @RequestParam String sessionId,
+            @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token,
+            org.springframework.security.core.Authentication auth,
             @PathVariable String tableName) {
         try {
-            return ResponseEntity.ok(schemaService.getColumns(getSession(sessionId), tableName));
-        } catch (SQLException e) {
+            java.sql.Connection c = sessions.get(auth.getName(), token);
+            return ResponseEntity.ok(schemaService.getColumns(c, c.getCatalog(), tableName));
+        } catch (SQLException | SecurityException e) {
             throw databaseError(e);
         }
     }
 
-    private ConnectionRequest getSession(String sessionId) {
-        ConnectionRequest request = sessionStore.get(sessionId);
-        if (request == null) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Oturum bulunamadı veya süresi doldu. Lütfen yeniden bağlanın.");
-        }
-        return request;
-    }
-
-    private ResponseStatusException databaseError(SQLException exception) {
+    private ResponseStatusException databaseError(Exception exception) {
         return new ResponseStatusException(HttpStatus.BAD_GATEWAY,
                 "Veritabanı şema bilgisi alınamadı: " + exception.getMessage(), exception);
     }

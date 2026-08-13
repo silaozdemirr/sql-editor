@@ -177,6 +177,22 @@ body {
   color: var(--text-muted);
 }
 
+.logout-button {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  margin-top: .9rem;
+  padding: .45rem .75rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  background: var(--bg-secondary);
+  font: .78rem var(--font-main);
+  cursor: pointer;
+}
+
+.logout-button:hover { color: var(--error); border-color: var(--error); }
+
 /* =============================================
    CONNECTION CARD
    ============================================= */

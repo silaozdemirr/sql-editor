@@ -40,8 +40,8 @@ public class ConnectionController {
      * Başarıyla bağlanırsa session ID döner.
      */
     @PostMapping("/connect")
-    public ResponseEntity<ConnectionResponse> connect(@Valid @RequestBody ConnectionRequest request) {
-        ConnectionResponse response = connectionService.connect(request);
+    public ResponseEntity<ConnectionResponse> connect(@Valid @RequestBody ConnectionRequest request, org.springframework.security.core.Authentication authentication) {
+        ConnectionResponse response = connectionService.connect(authentication.getName(), request);
         return ResponseEntity.ok(response);
     }
 

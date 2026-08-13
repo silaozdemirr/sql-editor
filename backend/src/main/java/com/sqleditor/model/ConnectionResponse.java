@@ -7,7 +7,7 @@ package com.sqleditor.model;
 public class ConnectionResponse {
 
     private boolean success;
-    private String sessionId;
+    private String connectionToken;
     private String serverVersion;
     private String databaseName;
     private String host;
@@ -27,7 +27,7 @@ public class ConnectionResponse {
         private final ConnectionResponse obj = new ConnectionResponse();
 
         public Builder success(boolean v)         { obj.success = v;         return this; }
-        public Builder sessionId(String v)        { obj.sessionId = v;       return this; }
+        public Builder connectionToken(String v)  { obj.connectionToken = v; return this; }
         public Builder serverVersion(String v)    { obj.serverVersion = v;   return this; }
         public Builder databaseName(String v)     { obj.databaseName = v;    return this; }
         public Builder host(String v)             { obj.host = v;            return this; }
@@ -42,7 +42,7 @@ public class ConnectionResponse {
 
     // Getters
     public boolean isSuccess()        { return success; }
-    public String getSessionId()      { return sessionId; }
+    public String getConnectionToken() { return connectionToken; }
     public String getServerVersion()  { return serverVersion; }
     public String getDatabaseName()   { return databaseName; }
     public String getHost()           { return host; }

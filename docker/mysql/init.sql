@@ -283,3 +283,7 @@ WHERE o.aktif = TRUE
 ORDER BY ok.okul_adi, b.bolum_adi, o.soyad, o.ad;
 
 SELECT 'Veritabanı başarıyla oluşturuldu! Tablolar: okullar, bolumler, ogretmenler, ogrenciler, dersler, ogrenci_dersler' AS durum;
+CREATE DATABASE IF NOT EXISTS sqleditor_app CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER IF NOT EXISTS 'sqleditor_app'@'%' IDENTIFIED BY 'change-this-app-password';
+GRANT ALL PRIVILEGES ON sqleditor_app.* TO 'sqleditor_app'@'%';
+FLUSH PRIVILEGES;

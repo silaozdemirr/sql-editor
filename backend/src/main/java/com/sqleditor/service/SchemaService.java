@@ -20,14 +20,12 @@ public class SchemaService {
     /**
      * Veritabanındaki tüm tabloları ve view'ları döner.
      */
-    public SchemaResponse getSchema(ConnectionRequest request) throws SQLException {
-        String jdbcUrl = buildJdbcUrl(request);
+    public SchemaResponse getSchema(Connection conn, String databaseName) throws SQLException {
 
         List<TableInfo> tables = new ArrayList<>();
         List<TableInfo> views  = new ArrayList<>();
 
-        try (Connection conn = DriverManager.getConnection(
-                jdbcUrl, request.getUsername(), request.getPassword())) {
+        try (conn) {
 
             String sql = """
                 SELECT
@@ -40,7 +38,7 @@ public class SchemaService {
                 """;
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, request.getDatabase());
+                ps.setString(1, databaseName);
 
                 try (ResultSet rs = ps.executeQuery()) {
                     while (rs.next()) {
@@ -61,7 +59,7 @@ public class SchemaService {
         }
 
         return SchemaResponse.builder()
-                .databaseName(request.getDatabase())
+                .databaseName(databaseName)
                 .tables(tables)
                 .views(views)
                 .build();
@@ -70,12 +68,10 @@ public class SchemaService {
     /**
      * Belirli bir tablonun kolon bilgilerini döner.
      */
-    public List<ColumnInfo> getColumns(ConnectionRequest request, String tableName) throws SQLException {
-        String jdbcUrl = buildJdbcUrl(request);
+    public List<ColumnInfo> getColumns(Connection conn, String databaseName, String tableName) throws SQLException {
         List<ColumnInfo> columns = new ArrayList<>();
 
-        try (Connection conn = DriverManager.getConnection(
-                jdbcUrl, request.getUsername(), request.getPassword())) {
+        try (conn) {
 
             String sql = """
                 SELECT
@@ -93,7 +89,7 @@ public class SchemaService {
                 """;
 
             try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, request.getDatabase());
+                ps.setString(1, databaseName);
                 ps.setString(2, tableName);
 
                 try (ResultSet rs = ps.executeQuery()) {
@@ -121,17 +117,4 @@ public class SchemaService {
         return columns;
     }
 
-    private String buildJdbcUrl(ConnectionRequest request) {
-        return switch (request.getDbType().toUpperCase()) {
-            case "MYSQL" -> String.format(
-                    "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8",
-                    request.getHost(), request.getPort(), request.getDatabase()
-            );
-            case "POSTGRESQL" -> String.format(
-                    "jdbc:postgresql://%s:%d/%s",
-                    request.getHost(), request.getPort(), request.getDatabase()
-            );
-            default -> throw new IllegalArgumentException("Desteklenmeyen tip: " + request.getDbType());
-        };
-    }
 }

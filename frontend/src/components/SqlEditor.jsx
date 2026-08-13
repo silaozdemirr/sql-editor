@@ -10,7 +10,7 @@ SELECT *
 FROM ogrenciler
 LIMIT 25;`;
 
-export default function SqlEditor({ sessionId, onQueryResult, onQueryError, onRunningChange }) {
+export default function SqlEditor({ connectionToken, onQueryResult, onQueryError, onRunningChange }) {
   const [query, setQuery] = useState(INITIAL_SQL);
   const [notice, setNotice] = useState('Sorguyu çalıştırmak için Ctrl + Enter kullanın.');
   const [isRunning, setIsRunning] = useState(false);
@@ -23,7 +23,7 @@ export default function SqlEditor({ sessionId, onQueryResult, onQueryError, onRu
     }
     setIsRunning(true); onRunningChange(true); onQueryError('');
     try {
-      const result = await executeQuery(sessionId, executableSql);
+      const result = await executeQuery(connectionToken, executableSql);
       onQueryResult(result);
       setNotice(`${result.executionTimeMs} ms içinde tamamlandı.`);
     } catch (requestError) {
@@ -32,7 +32,7 @@ export default function SqlEditor({ sessionId, onQueryResult, onQueryError, onRu
     } finally {
       setIsRunning(false); onRunningChange(false);
     }
-  }, [onQueryError, onQueryResult, onRunningChange, query, sessionId]);
+  }, [connectionToken, onQueryError, onQueryResult, onRunningChange, query]);
 
   const handleEditorKeydown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
