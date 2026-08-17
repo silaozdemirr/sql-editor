@@ -8,7 +8,7 @@ export default defineConfig({
     // Backend API proxy - CORS sorununu ortadan kaldırır
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'http://localhost:8085',
         changeOrigin: true,
       },
     },

@@ -118,10 +118,10 @@ POST /api/connection/test
 
 ## 🗓️ Aşamalar
 
-- [x] **Aşama 1** — Database Connection ← ŞU AN
-- [ ] **Aşama 2** — Schema Explorer (sol panel, tablo ağacı)
-- [ ] **Aşama 3** — SQL Editor (CodeMirror)
-- [ ] **Aşama 4** — Query Results (tablo görünümü)
+- [x] **Aşama 1** — Database Connection
+- [x] **Aşama 2** — Schema Explorer (sol panel, tablo ağacı)
+- [x] **Aşama 3** — SQL Editor (CodeMirror)
+- [x] **Aşama 4** — Query Results (tablo görünümü)
 - [ ] **Aşama 5** — PostgreSQL, MSSQL desteği
 
 ---

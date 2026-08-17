@@ -1,38 +1,66 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, MySQL } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { FiCode, FiPlay, FiX } from 'react-icons/fi';
-import { executeQuery } from '../api/queryApi';
+import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiInfo } from 'react-icons/fi';
+import { executeQuery, explainQuery, manageTransaction } from '../api/queryApi';
+import QueryResults from './QueryResults';
 
-const INITIAL_SQL = `-- Sorgunuzu buraya yazın
-SELECT *
-FROM ogrenciler
-LIMIT 25;`;
+const INITIAL_SQL = `-- Sorgunuzu buraya yazın\n`;
 
-export default function SqlEditor({ connectionToken, onQueryResult, onQueryError, onRunningChange }) {
-  const [query, setQuery] = useState(INITIAL_SQL);
-  const [notice, setNotice] = useState('Sorguyu çalıştırmak için Ctrl + Enter kullanın.');
-  const [isRunning, setIsRunning] = useState(false);
+export default function SqlEditor({ connectionToken, userRole }) {
+  const [tabs, setTabs] = useState([{
+    id: 1, title: 'SQL Query 1', query: INITIAL_SQL, notice: 'Sorguyu çalıştırmak için Ctrl + Enter kullanın.', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
+  }]);
+  const [activeTabId, setActiveTabId] = useState(1);
+  const [autoCommit, setAutoCommit] = useState(true);
 
-  const runQuery = useCallback(async () => {
-    const executableSql = query.replace(/^\s*--.*$/gm, '').trim();
-    if (!executableSql) {
-      setNotice('Çalıştırmak için geçerli bir SQL sorgusu yazın.');
+  const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
+
+  const updateTab = useCallback((id, updates) => {
+    setTabs(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
+  }, []);
+
+  const addNewTab = () => {
+    const newId = Math.max(...tabs.map(t => t.id), 0) + 1;
+    setTabs([...tabs, { id: newId, title: `SQL Query ${newId}`, query: '', notice: 'Yeni sekme.', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: '' }]);
+    setActiveTabId(newId);
+  };
+
+  const closeTab = (id, e) => {
+    e.stopPropagation();
+    if (tabs.length === 1) {
+      updateTab(id, { query: '', notice: 'Temizlendi.', queryResult: null, queryError: '', explainResult: null, explainError: '' });
       return;
     }
-    setIsRunning(true); onRunningChange(true); onQueryError('');
+    const newTabs = tabs.filter(t => t.id !== id);
+    setTabs(newTabs);
+    if (activeTabId === id) setActiveTabId(newTabs[0].id);
+  };
+
+  const runQuery = useCallback(async () => {
+    const executableSql = activeTab.query.replace(/^\s*--.*$/gm, '').trim();
+    if (!executableSql) {
+      updateTab(activeTabId, { notice: 'Çalıştırmak için geçerli bir SQL sorgusu yazın.' });
+      return;
+    }
+    updateTab(activeTabId, { isRunning: true, queryError: '', explainError: '' });
     try {
       const result = await executeQuery(connectionToken, executableSql);
-      onQueryResult(result);
-      setNotice(`${result.executionTimeMs} ms içinde tamamlandı.`);
+      updateTab(activeTabId, { queryResult: result, notice: `${result.executionTimeMs} ms içinde tamamlandı.` });
+      try {
+        const expResult = await explainQuery(connectionToken, executableSql);
+        updateTab(activeTabId, { explainResult: expResult });
+      } catch (expError) {
+        updateTab(activeTabId, { explainError: expError.response?.data?.message || 'Açıklama alınamadı.' });
+      }
     } catch (requestError) {
       const message = requestError.response?.data?.message || 'Sorgu çalıştırılamadı.';
-      onQueryError(message); setNotice('Sorgu hatayla tamamlandı.');
+      updateTab(activeTabId, { queryError: message, notice: 'Sorgu hatayla tamamlandı.' });
     } finally {
-      setIsRunning(false); onRunningChange(false);
+      updateTab(activeTabId, { isRunning: false });
     }
-  }, [connectionToken, onQueryError, onQueryResult, onRunningChange, query]);
+  }, [connectionToken, activeTab.query, activeTabId, updateTab]);
 
   const handleEditorKeydown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -41,28 +69,76 @@ export default function SqlEditor({ connectionToken, onQueryResult, onQueryError
     }
   }, [runQuery]);
 
+  useEffect(() => {
+    if (connectionToken) {
+      manageTransaction(connectionToken, autoCommit ? 'autocommit_on' : 'autocommit_off')
+        .then(() => updateTab(activeTabId, { notice: autoCommit ? 'Auto-Commit AÇIK' : 'Auto-Commit KAPALI.' }))
+        .catch(() => updateTab(activeTabId, { notice: 'Auto-Commit durumu değiştirilemedi.' }));
+    }
+  }, [autoCommit, connectionToken, activeTabId, updateTab]);
+
+  const runCommit = async () => {
+    try {
+      await manageTransaction(connectionToken, 'commit');
+      updateTab(activeTabId, { notice: 'Değişiklikler başarıyla kaydedildi (Commit).' });
+    } catch {
+      updateTab(activeTabId, { notice: 'Commit işlemi başarısız oldu.' });
+    }
+  };
+
+  const runRollback = async () => {
+    try {
+      await manageTransaction(connectionToken, 'rollback');
+      updateTab(activeTabId, { notice: 'Değişiklikler geri alındı (Rollback).' });
+    } catch {
+      updateTab(activeTabId, { notice: 'Rollback işlemi başarısız oldu.' });
+    }
+  };
+
   return (
-    <section className="sql-editor" aria-label="SQL editörü">
-      <header className="editor-toolbar">
-        <div className="editor-tabs">
-          <div className="editor-tab active"><FiCode /> SQL Query 1 <button type="button" title="Sekmeyi kapat" aria-label="Sekmeyi kapat"><FiX /></button></div>
-          <button className="new-tab-button" type="button" disabled title="Çoklu sekme Aşama 4 sonrası eklenecek">+</button>
+    <>
+      <section className="sql-editor" aria-label="SQL editörü" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+        <header className="editor-toolbar">
+          <div className="editor-tabs">
+            {tabs.map(tab => (
+              <div key={tab.id} className={`editor-tab ${tab.id === activeTabId ? 'active' : ''}`} onClick={() => setActiveTabId(tab.id)}>
+                <FiCode /> {tab.title} <button type="button" onClick={(e) => closeTab(tab.id, e)} title="Sekmeyi kapat" aria-label="Sekmeyi kapat"><FiX /></button>
+              </div>
+            ))}
+            <button className="new-tab-button" type="button" onClick={addNewTab} title="Yeni sekme aç">+</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: userRole === 'READ_ONLY' ? 'not-allowed' : 'pointer', opacity: userRole === 'READ_ONLY' ? 0.5 : 1 }}>
+              <input type="checkbox" checked={autoCommit} onChange={(e) => setAutoCommit(e.target.checked)} disabled={userRole === 'READ_ONLY'} />
+              Auto-Commit
+            </label>
+            <button type="button" onClick={runCommit} disabled={userRole === 'READ_ONLY' || autoCommit} title="Commit" style={{ background: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: (userRole === 'READ_ONLY' || autoCommit) ? 'not-allowed' : 'pointer' }}><FiCheck /> Commit</button>
+            <button type="button" onClick={runRollback} disabled={userRole === 'READ_ONLY' || autoCommit} title="Rollback" style={{ background: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: (userRole === 'READ_ONLY' || autoCommit) ? 'not-allowed' : 'pointer' }}><FiRotateCcw /> Rollback</button>
+            <button className="run-query-button" type="button" onClick={runQuery} disabled={activeTab.isRunning} title="Sorguyu çalıştır (Ctrl + Enter)"><FiPlay /> {activeTab.isRunning ? 'Çalışıyor…' : 'Çalıştır'} <kbd>Ctrl ↵</kbd></button>
+          </div>
+        </header>
+        <div className="editor-content" onKeyDown={handleEditorKeydown}>
+          <CodeMirror
+            value={activeTab.query}
+            height="100%"
+            theme={oneDark}
+            extensions={[sql({ dialect: MySQL })]}
+            onChange={(val) => updateTab(activeTabId, { query: val })}
+            basicSetup={{ lineNumbers: true, highlightActiveLine: true, autocompletion: true, bracketMatching: true, foldGutter: true }}
+          />
         </div>
-        <button className="run-query-button" type="button" onClick={runQuery} disabled={isRunning} title="Sorguyu çalıştır (Ctrl + Enter)"><FiPlay /> {isRunning ? 'Çalışıyor…' : 'Çalıştır'} <kbd>Ctrl ↵</kbd></button>
-      </header>
-      <div className="editor-content" onKeyDown={handleEditorKeydown}>
-        <CodeMirror
-          value={query}
-          height="100%"
-          theme={oneDark}
-          extensions={[sql({ dialect: MySQL })]}
-          onChange={setQuery}
-          basicSetup={{ lineNumbers: true, highlightActiveLine: true, autocompletion: true, bracketMatching: true, foldGutter: true }}
-        />
-      </div>
-      <footer className="editor-statusbar">
-        <span>{notice}</span><span>MySQL · UTF-8</span>
-      </footer>
-    </section>
+        <footer className="editor-statusbar">
+          <span>{activeTab.notice}</span><span>MySQL · UTF-8</span>
+        </footer>
+      </section>
+      <QueryResults 
+        result={activeTab.queryResult} 
+        error={activeTab.queryError} 
+        explainResult={activeTab.explainResult}
+        explainError={activeTab.explainError}
+        isRunning={activeTab.isRunning} 
+        connectionToken={connectionToken} 
+      />
+    </>
   );
 }

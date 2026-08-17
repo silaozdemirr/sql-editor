@@ -5,17 +5,20 @@ services:
     image: mysql:8.0
     container_name: sqleditor-mysql
     environment:
-      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
       MYSQL_DATABASE: okul_db
       MYSQL_USER: sqleditor
-      MYSQL_PASSWORD: sqleditor123
+      MYSQL_PASSWORD_FILE: /run/secrets/db_password
     ports:
       - "3306:3306"
     volumes:
       - ./mysql/init.sql:/docker-entrypoint-initdb.d/init.sql
       - mysql_data:/var/lib/mysql
+    secrets:
+      - db_root_password
+      - db_password
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot123"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$(cat /run/secrets/db_root_password)"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,3 +27,9 @@ services:
 volumes:
   mysql_data:
     driver: local
+
+secrets:
+  db_root_password:
+    file: ./secrets/db_root_password.txt
+  db_password:
+    file: ./secrets/db_password.txt

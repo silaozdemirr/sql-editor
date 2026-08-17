@@ -41,8 +41,7 @@ public class SchemaController {
      */
     @GetMapping
     public ResponseEntity<SchemaResponse> getSchema(@org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, org.springframework.security.core.Authentication auth) {
-        try {
-            java.sql.Connection c = sessions.get(auth.getName(), token);
+        try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             return ResponseEntity.ok(schemaService.getSchema(c, c.getCatalog()));
         } catch (SQLException | SecurityException e) {
             throw databaseError(e);
@@ -58,8 +57,7 @@ public class SchemaController {
             @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token,
             org.springframework.security.core.Authentication auth,
             @PathVariable String tableName) {
-        try {
-            java.sql.Connection c = sessions.get(auth.getName(), token);
+        try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             return ResponseEntity.ok(schemaService.getColumns(c, c.getCatalog(), tableName));
         } catch (SQLException | SecurityException e) {
             throw databaseError(e);

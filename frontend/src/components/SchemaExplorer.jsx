@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle } from 'react-icons/fi';
 import { getSchema, getTableColumns } from '../api/schemaApi';
-import QueryResults from './QueryResults';
 const SqlEditor = lazy(() => import('./SqlEditor'));
 
 const ColumnIcon = ({ column }) => (
@@ -49,13 +48,10 @@ function SchemaGroup({ title, items, connectionToken, icon }) {
   </li>;
 }
 
-export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
+export default function SchemaExplorer({ connectionInfo, onDisconnect, userRole }) {
   const [schema, setSchema] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-  const [queryResult, setQueryResult] = useState(null);
-  const [queryError, setQueryError] = useState('');
-  const [isQueryRunning, setIsQueryRunning] = useState(false);
   const loadSchema = useCallback(async () => {
     setIsLoading(true); setError('');
     try { setSchema(await getSchema(connectionInfo.connectionToken)); }
@@ -68,7 +64,7 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
       <header className="explorer-header"><div><span className="panel-eyebrow">DATABASE EXPLORER</span><h1>Bağlantılar</h1></div>
         <button className="icon-button" type="button" onClick={loadSchema} disabled={isLoading} title="Şemayı yenile" aria-label="Şemayı yenile"><FiRefreshCw className={isLoading ? 'spin-icon' : ''} /></button>
       </header>
-      <section className="connection-tree"><div className="tree-row database-row"><FiChevronDown /><FiDatabase className="database-icon" /><span className="tree-label">{schema?.databaseName || connectionInfo.databaseName}</span><span className="connected-indicator" title="Bağlı" /></div>
+      <section className="connection-tree"><div className="tree-row database-row"><FiChevronDown /><FiDatabase className="database-icon" /><span className="tree-label">{connectionInfo.connectionName || schema?.databaseName || connectionInfo.databaseName}</span><span className="connected-indicator" title="Bağlı" /></div>
         {isLoading && <p className="schema-state">Şema yükleniyor…</p>}
         {error && <div className="schema-state error-state"><FiAlertCircle /><span>{error}</span><button type="button" onClick={loadSchema}>Tekrar dene</button></div>}
         {schema && !isLoading && !error && <ul className="schema-list root-list"><SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} icon={FiTable} /><SchemaGroup title="Görünümler" items={schema.views || []} connectionToken={connectionInfo.connectionToken} icon={FiLayers} /></ul>}
@@ -76,8 +72,12 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect }) {
       <footer className="explorer-footer"><span><span className="connected-indicator" /> MySQL bağlı</span><button className="disconnect-link" type="button" onClick={onDisconnect}><FiLogOut /> Bağlantıyı kes</button></footer>
     </aside>
     <section className="workspace-main">
-      <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor…</section>}><SqlEditor connectionToken={connectionInfo.connectionToken} onQueryResult={setQueryResult} onQueryError={setQueryError} onRunningChange={setIsQueryRunning} /></Suspense>
-      <QueryResults result={queryResult} error={queryError} isRunning={isQueryRunning} />
+      <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor…</section>}>
+        <SqlEditor 
+          connectionToken={connectionInfo.connectionToken} 
+          userRole={userRole} 
+        />
+      </Suspense>
     </section>
   </main>;
 }

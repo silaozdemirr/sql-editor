@@ -17,8 +17,6 @@ const DB_TYPES = [
     dotClass: 'mysql',
     placeholder: {
       host: 'localhost',
-      database: 'okul_db',
-      username: 'sqleditor',
     },
   },
   {
@@ -53,8 +51,8 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
   const [form, setForm] = useState({
     host: 'localhost',
     port: currentDb?.defaultPort || 3306,
-    database: 'okul_db',
-    username: 'sqleditor',
+    database: '',
+    username: '',
     password: '',
     dbType: 'MYSQL',
     connectionName: '',
@@ -77,9 +75,9 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
       ...prev,
       dbType: db.key,
       port: dbConf.defaultPort,
-      host: dbConf.placeholder.host,
-      database: dbConf.placeholder.database,
-      username: dbConf.placeholder.username,
+      host: 'localhost',
+      database: '',
+      username: '',
     }));
   };
 
@@ -130,6 +128,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
       if (result.success) {
         setConnectStatus('success');
+        result.connectionName = form.connectionName || form.database;
         // Kısa bir gecikme ile geçiş animasyonu
         setTimeout(() => {
           onConnected(result);
@@ -170,7 +169,11 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
     setIsConnecting(true);
     try {
       const result = await connectSavedConnection(id);
-      if (result.success) onConnected(result);
+      if (result.success) {
+        const conn = savedConnections.find(c => c.id === id);
+        result.connectionName = conn ? conn.connectionName : result.databaseName;
+        onConnected(result);
+      }
       else setSavedError(result.message || 'Bağlantı kurulamadı.');
     } catch (err) {
       setSavedError(err.response?.data?.message || 'Kayıtlı bağlantı kurulamadı.');
@@ -306,7 +309,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
                   className="form-input"
                   value={form.database}
                   onChange={handleChange}
-                  placeholder="okul_db"
+                  placeholder="Örn. hastane_db"
                   disabled={isLoading}
                   autoComplete="off"
                 />
@@ -341,9 +344,9 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
                   className="form-input"
                   value={form.username}
                   onChange={handleChange}
-                  placeholder="sqleditor"
+                  placeholder="Kullanıcı adı girin"
                   disabled={isLoading}
-                  autoComplete="username"
+                  autoComplete="off"
                 />
               </div>
             </div>

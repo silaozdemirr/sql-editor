@@ -80,8 +80,12 @@ public class AuthService {
         return response(users.get(0));
     }
 
-    public void revoke(String raw) {
-        db.update("update refresh_tokens set revoked_at=current_timestamp where token_hash=?", hash.hash(raw));
+    public String revoke(String raw) {
+        String tokenHash = hash.hash(raw);
+        List<String> userIds = db.query("select user_id from refresh_tokens where token_hash=?", 
+                (rs, rowNum) -> rs.getString(1), tokenHash);
+        db.update("update refresh_tokens set revoked_at=current_timestamp where token_hash=?", tokenHash);
+        return userIds.isEmpty() ? null : userIds.get(0);
     }
 
     private User find(String email) {
