@@ -11,15 +11,17 @@ public class QueryResponse {
     private boolean truncated;
     private long executionTimeMs;
     private String message;
+    private String tableName; // Added for inline editing
 
     public QueryResponse(List<String> columns, List<List<String>> rows, Integer updateCount,
-                         boolean truncated, long executionTimeMs, String message) {
+                         boolean truncated, long executionTimeMs, String message, String tableName) {
         this.columns = columns;
         this.rows = rows;
         this.updateCount = updateCount;
         this.truncated = truncated;
         this.executionTimeMs = executionTimeMs;
         this.message = message;
+        this.tableName = tableName;
     }
 
     public List<String> getColumns() { return columns; }
@@ -28,4 +30,5 @@ public class QueryResponse {
     public boolean isTruncated() { return truncated; }
     public long getExecutionTimeMs() { return executionTimeMs; }
     public String getMessage() { return message; }
+    public String getTableName() { return tableName; }
 }

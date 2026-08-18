@@ -1,49 +1,257 @@
-import { useState, useEffect } from 'react';
-import { FiAlertCircle, FiCheckCircle, FiDatabase, FiClock, FiInfo, FiPlay } from 'react-icons/fi';
-import { getQueryHistory } from '../api/queryApi';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { FiAlertCircle, FiCheckCircle, FiDatabase, FiClock, FiInfo, FiDownload, FiPlus, FiMinus } from 'react-icons/fi';
+import { getQueryHistory, updateCell, executeQuery } from '../api/queryApi';
+import { AgGridReact } from 'ag-grid-react';
+import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-quartz.css';
+
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+const formatDataForGrid = (data, isEditable = false) => {
+  if (!data || !data.columns || !data.rows) return { rowData: [], colDefs: [] };
+  const colDefs = data.columns.map((col) => ({ 
+    field: col, 
+    headerName: col,
+    editable: isEditable,
+    valueFormatter: (params) => params.value === null ? 'NULL' : params.value,
+    cellClass: (params) => params.value === null ? 'null-value' : (isEditable ? 'editable-cell' : ''),
+    comparator: (valueA, valueB) => {
+      if (valueA === null && valueB === null) return 0;
+      if (valueA === null) return -1;
+      if (valueB === null) return 1;
+      const numA = Number(valueA);
+      const numB = Number(valueB);
+      if (!isNaN(numA) && !isNaN(numB) && valueA !== '' && valueB !== '') {
+         return numA - numB;
+      }
+      return String(valueA).localeCompare(String(valueB));
+    }
+  }));
+  
+  colDefs.unshift({
+      headerName: '#',
+      valueGetter: 'node.rowIndex + 1',
+      width: 70,
+      minWidth: 70,
+      maxWidth: 70,
+      pinned: 'left',
+      suppressMenu: true,
+      filter: false,
+      sortable: false,
+      resizable: false
+  });
+
+  const rowData = data.rows.map((row) => {
+    const obj = {};
+    data.columns.forEach((col, i) => {
+      obj[col] = row[i];
+    });
+    return obj;
+  });
+  return { rowData, colDefs };
+};
 
 export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken }) {
   const [activeTab, setActiveTab] = useState('results');
   const [history, setHistory] = useState(null);
   const [historyError, setHistoryError] = useState('');
-  const hasRows = result?.columns?.length > 0;
+  const [isLightMode, setIsLightMode] = useState(() => document.body.classList.contains('light-mode'));
+  const gridRef = useRef();
   
   useEffect(() => {
-    if (activeTab === 'history' && connectionToken) {
-      getQueryHistory(connectionToken)
-        .then(setHistory)
-        .catch(e => setHistoryError(e.response?.data?.message || 'Geçmiş alınamadı.'));
-    }
-  }, [activeTab, connectionToken, result]);
+    const handleThemeChange = () => setIsLightMode(document.body.classList.contains('light-mode'));
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, []);
 
+  const hasRows = result?.columns?.length > 0;
+  
+  const { rowData: resultRowData, colDefs: resultColDefs } = useMemo(() => formatDataForGrid(result, !!result?.tableName), [result]);
+  const { rowData: explainRowData, colDefs: explainColDefs } = useMemo(() => formatDataForGrid(explainResult, false), [explainResult]);
+
+  const handleCellValueChanged = async (params) => {
+    if (!result?.tableName) return;
+    const { colDef, newValue, oldValue, data } = params;
+    
+    if (newValue === oldValue) return;
+
+    if (data._isNewRow) {
+      const columns = [];
+      const values = [];
+      Object.keys(data).forEach(key => {
+        if (key !== '_isNewRow' && data[key] !== undefined && data[key] !== null && data[key] !== '') {
+          columns.push(`\`${key}\``);
+          values.push(`'${String(data[key]).replace(/'/g, "''")}'`);
+        }
+      });
+      
+      if (columns.length === 0) return;
+
+      try {
+        const sql = `INSERT INTO \`${result.tableName}\` (${columns.join(', ')}) VALUES (${values.join(', ')})`;
+        await executeQuery(connectionToken, sql);
+        data._isNewRow = false;
+        alert('Yeni satır başarıyla eklendi! Tüm verileri ve otomatik oluşan ID leri görmek için sorguyu yeniden çalıştırın.');
+      } catch (err) {
+        alert('Satır eklenirken hata: ' + (err.response?.data?.message || 'Zorunlu alanları doldurun.'));
+      }
+      return;
+    }
+
+    try {
+      const oldRowValues = { ...data };
+      oldRowValues[colDef.field] = oldValue;
+      
+      const res = await updateCell(result.tableName, colDef.field, newValue, oldRowValues, connectionToken);
+      console.log("Update success:", res);
+    } catch (err) {
+      params.node.setDataValue(colDef.field, oldValue);
+      alert(err.response?.data?.message || 'Hücre güncellenemedi.');
+    }
+  };
+
+  const handleAddRow = () => {
+    if (!result?.tableName) return;
+    gridRef.current.api.applyTransaction({ add: [{ _isNewRow: true }] });
+  };
+
+  const handleDeleteRow = async () => {
+    if (!result?.tableName) return;
+    const selectedNodes = gridRef.current.api.getSelectedNodes();
+    if (selectedNodes.length === 0) {
+      alert('Lütfen silmek için bir satır seçin.');
+      return;
+    }
+    const data = selectedNodes[0].data;
+    if (!window.confirm('Seçili satırı silmek istediğinize emin misiniz?')) return;
+    
+    const conditions = [];
+    result.columns.forEach(col => {
+      const val = data[col];
+      if (val === null || val === undefined) {
+        conditions.push(`\`${col}\` IS NULL`);
+      } else {
+        conditions.push(`\`${col}\` = '${String(val).replace(/'/g, "''")}'`);
+      }
+    });
+    
+    const sql = `DELETE FROM \`${result.tableName}\` WHERE ${conditions.join(' AND ')} LIMIT 1`;
+    try {
+      await executeQuery(connectionToken, sql);
+      gridRef.current.api.applyTransaction({ remove: [data] });
+    } catch (err) {
+      alert(err.response?.data?.message || 'Satır silinemedi.');
+    }
+  };
+
+  const exportToCsv = () => {
+    if (!gridRef.current || !gridRef.current.api) return;
+    gridRef.current.api.exportDataAsCsv({ fileName: 'sorgu_sonucu.csv' });
+  };
+
+  const exportToExcel = async () => {
+    if (!gridRef.current || !gridRef.current.api) return;
+    try {
+      // Dinamik import ile sadece ihtiyaç duyulduğunda yükle
+      const XLSX = await import('xlsx');
+      
+      const rowData = [];
+      gridRef.current.api.forEachNode((node) => {
+        rowData.push(node.data);
+      });
+      
+      // Sütun başlıklarını al (sadece görünür olanlar, veya hepsi)
+      const cols = gridRef.current.api.getColumns()
+        .filter(col => col.getColId() !== '0') // # kolonunu atla
+        .map(col => col.getColDef().field);
+
+      const worksheet = XLSX.utils.json_to_sheet(rowData, { header: cols });
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Sonuçlar");
+      
+      XLSX.writeFile(workbook, 'sorgu_sonucu.xlsx');
+    } catch (err) {
+      console.error('Excel olarak kaydedilemedi:', err);
+      alert('Excel dosyası oluşturulurken bir hata oluştu.');
+    }
+  };
+
+  const defaultColDef = useMemo(() => ({
+    sortable: true,
+    filter: true,
+    resizable: true,
+    minWidth: 100
+  }), []);
+
+  const loadHistory = async () => {
+    try { setHistory(await getQueryHistory(connectionToken)); setHistoryError(''); } 
+    catch (e) { setHistoryError(e.response?.data?.message || 'Geçmiş alınamadı.'); }
+  };
+  
   return <section className="query-results" aria-label="Sorgu sonuçları">
-    <header className="results-header" style={{ display: 'flex', borderBottom: '1px solid #333', padding: 0 }}>
+    <header className="results-header" style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', padding: 0 }}>
       <div style={{ display: 'flex', gap: '16px', padding: '0 16px' }}>
-        <button type="button" onClick={() => setActiveTab('results')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'results' ? '2px solid #007acc' : '2px solid transparent', padding: '8px 0', color: activeTab === 'results' ? '#fff' : '#aaa', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><FiDatabase /> Sonuçlar</button>
-        <button type="button" onClick={() => setActiveTab('history')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'history' ? '2px solid #007acc' : '2px solid transparent', padding: '8px 0', color: activeTab === 'history' ? '#fff' : '#aaa', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><FiClock /> Sorgu Geçmişi</button>
-        <button type="button" onClick={() => setActiveTab('explain')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'explain' ? '2px solid #007acc' : '2px solid transparent', padding: '8px 0', color: activeTab === 'explain' ? '#fff' : '#aaa', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}><FiInfo /> Açıklama</button>
+        <button type="button" onClick={() => setActiveTab('results')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'results' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'results' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'results' ? 600 : 400 }}><FiDatabase /> Sonuçlar</button>
+        <button type="button" onClick={() => { setActiveTab('history'); loadHistory(); }} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'history' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'history' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'history' ? 600 : 400 }}><FiClock /> Sorgu Geçmişi</button>
+        <button type="button" onClick={() => setActiveTab('explain')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'explain' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'explain' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'explain' ? 600 : 400 }}><FiInfo /> Açıklama</button>
       </div>
-      <div style={{ marginLeft: 'auto', paddingRight: '16px', display: 'flex', alignItems: 'center' }}>{result && <span>{result.executionTimeMs} ms</span>}</div>
+      <div style={{ marginLeft: 'auto', paddingRight: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {activeTab === 'results' && hasRows && (
+          <>
+            {result?.tableName && (
+              <>
+                <button type="button" onClick={handleAddRow} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)', color: '#3b82f6', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Yeni boş satır ekle">
+                  <FiPlus size={13} />
+                </button>
+                <button type="button" onClick={handleDeleteRow} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.25)', color: '#ef4444', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Seçili satırı sil">
+                  <FiMinus size={13} />
+                </button>
+              </>
+            )}
+            <button type="button" onClick={exportToCsv} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="CSV olarak kaydet">
+              <FiDownload size={13} />CSV
+            </button>
+            <button type="button" onClick={exportToExcel} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Excel olarak kaydet">
+              <FiDownload size={13} />Excel
+            </button>
+          </>
+        )}
+        {result && <span style={{ color: '#aaa', fontSize: '12px' }}>{result.executionTimeMs} ms</span>}
+      </div>
     </header>
     
-    <div style={{ flex: 1, overflow: 'auto', padding: activeTab === 'results' ? '0' : '16px' }}>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {activeTab === 'results' && (
         <>
           {isRunning && <div className="results-state">Sorgu çalıştırılıyor…</div>}
           {!isRunning && error && <div className="results-state result-error"><FiAlertCircle /> {error}</div>}
           {!isRunning && !error && !result && <div className="results-state">Sorgu sonucunuz burada tablo olarak görüntülenecek.</div>}
           {!isRunning && !error && result && !hasRows && <div className="results-state result-success"><FiCheckCircle /> {result.message}</div>}
-          {!isRunning && !error && hasRows && <div className="results-table-wrap"><table className="results-table">
-            <thead><tr><th>#</th>{result.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
-            <tbody>{result.rows.map((row, rowIndex) => <tr key={rowIndex}><td>{rowIndex + 1}</td>{row.map((value, columnIndex) => <td key={`${rowIndex}-${columnIndex}`} title={value ?? 'NULL'} className={value === null ? 'null-value' : ''}>{value ?? 'NULL'}</td>)}</tr>)}</tbody>
-          </table>{result.truncated && <p className="results-limit">İlk 1000 satır gösteriliyor. Sonucu daraltmak için LIMIT kullanın.</p>}</div>}
+          {!isRunning && !error && hasRows && <div className={`results-table-wrap ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
+            <AgGridReact 
+              ref={gridRef}
+              theme="legacy"
+              rowData={resultRowData} 
+              columnDefs={resultColDefs} 
+              defaultColDef={defaultColDef} 
+              pagination={true} 
+              paginationPageSize={50}
+              paginationPageSizeSelector={[20, 50, 100, 500]}
+              rowHeight={35}
+              headerHeight={40}
+              rowSelection="single"
+              onCellValueChanged={handleCellValueChanged}
+              style={{ flex: 1, width: '100%', height: '100%' }}
+            />
+          </div>}
         </>
       )}
       {activeTab === 'history' && (
-        <div className="results-table-wrap">
+        <div className="results-table-wrap" style={{ padding: '16px', overflow: 'auto' }}>
+          {!history && !historyError && <div className="results-state">Geçmiş yükleniyor…</div>}
           {historyError && <div className="results-state result-error"><FiAlertCircle /> {historyError}</div>}
-          {!historyError && !history && <div className="results-state">Yükleniyor...</div>}
-          {!historyError && history && history.length === 0 && <div className="results-state">Henüz bir sorgu geçmişiniz yok.</div>}
+          {history && history.length === 0 && <div className="results-state">Sorgu geçmişi boş.</div>}
           {history && history.length > 0 && <table className="results-table">
             <thead><tr><th>Zaman</th><th>Süre (ms)</th><th>Durum</th><th>Sorgu</th></tr></thead>
             <tbody>{history.map((h, i) => <tr key={i}>
@@ -55,19 +263,26 @@ export default function QueryResults({ result, error, explainResult, explainErro
           </table>}
         </div>
       )}
-      {activeTab === 'explain' && (
-        <div className="results-table-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-            {isRunning && <div className="results-state">Açıklama planı çalıştırılıyor…</div>}
-            {!isRunning && explainError && <div className="results-state result-error"><FiAlertCircle /> {explainError}</div>}
-            {!isRunning && !explainError && !explainResult && <div className="results-state" style={{ color: '#888' }}>
-              Henüz bir sorgu çalıştırılmadı.
-            </div>}
-            {!isRunning && !explainError && explainResult && <table className="results-table" style={{ margin: 0 }}>
-            <thead><tr><th>#</th>{explainResult.columns.map((column) => <th key={column}>{column}</th>)}</tr></thead>
-            <tbody>{explainResult.rows.map((row, rowIndex) => <tr key={rowIndex}><td>{rowIndex + 1}</td>{row.map((value, columnIndex) => <td key={`${rowIndex}-${columnIndex}`} title={value ?? 'NULL'} className={value === null ? 'null-value' : ''}>{value ?? 'NULL'}</td>)}</tr>)}</tbody>
-          </table>}
-        </div>
-      )}
+      {activeTab === 'explain' && <div className="results-table-wrap" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {isRunning && <div className="results-state" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Açıklama planı çalıştırılıyor…</div>}
+          {!isRunning && explainError && <div className="results-state result-error" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FiAlertCircle /> {explainError}</div>}
+          {!isRunning && !explainError && !explainResult && <div className="results-state" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+            Henüz bir sorgu çalıştırılmadı.
+          </div>}
+          {!isRunning && !explainError && explainResult && <div className={`ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
+            <AgGridReact 
+              theme="legacy"
+              rowData={explainRowData} 
+              columnDefs={explainColDefs} 
+              defaultColDef={defaultColDef} 
+              pagination={true} 
+              paginationPageSize={50}
+              rowHeight={35}
+              headerHeight={40}
+              style={{ flex: 1, width: '100%', height: '100%' }}
+            />
+          </div>}
+      </div>}
     </div>
   </section>;
 }

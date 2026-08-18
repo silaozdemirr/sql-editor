@@ -19,3 +19,15 @@ export const manageTransaction = async (connectionToken, action) => {
   const response = await api.post(`/query/transaction?action=${action}`, null, { headers: { 'X-Connection-Token': connectionToken } });
   return response.data;
 };
+
+export const updateCell = async (tableName, updatedColumn, newValue, oldRowValues, connectionToken) => {
+  const response = await api.post('/query/update', {
+    tableName,
+    updatedColumn,
+    newValue,
+    oldRowValues
+  }, {
+    headers: { 'X-Connection-Token': connectionToken },
+  });
+  return response.data;
+};

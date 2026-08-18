@@ -76,9 +76,12 @@
 html { font-size: 14px; scroll-behavior: smooth; }
 
 body {
-  font-family: var(--font-main);
+  margin: 0;
+  padding: 0;
+  color-scheme: dark;
   background-color: var(--bg-primary);
   color: var(--text-primary);
+  font-family: var(--font-main);
   line-height: 1.6;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
@@ -807,3 +810,143 @@ body {
 }
 
 .text-center { text-align: center; }
+
+/* =============================================
+   AG GRID CUSTOMIZATIONS
+   ============================================= */
+.ag-theme-quartz-dark {
+  --ag-background-color: var(--bg-panel);
+  --ag-header-background-color: var(--bg-card);
+  --ag-border-color: var(--border-subtle);
+  --ag-row-border-color: var(--border-subtle);
+  --ag-header-column-separator-color: transparent;
+  --ag-row-hover-color: var(--bg-hover);
+  --ag-font-family: var(--font-mono);
+  --ag-font-size: 0.74rem;
+  --ag-header-column-resize-handle-color: var(--accent);
+  --ag-active-color: var(--accent);
+  --ag-selected-row-background-color: rgba(96, 165, 250, 0.1);
+  --ag-odd-row-background-color: rgba(255, 255, 255, 0.01);
+}
+.ag-theme-quartz-dark .ag-header-cell-text {
+  color: var(--accent-light);
+  font-weight: 500;
+}
+.ag-theme-quartz-dark .null-value {
+  color: var(--accent-light);
+  font-style: italic;
+}
+.ag-theme-quartz-dark .ag-cell {
+  display: flex;
+  align-items: center;
+}
+
+
+body.light-mode {
+  /* Arka plan - Soft Bej / Krem tonları */
+  --bg-primary:    #f5f3ef; /* Ana arkaplan */
+  --bg-secondary:  #eceae4; /* Yan menüler vb. */
+  --bg-panel:      #fdfcfb; /* Paneller */
+  --bg-card:       #ffffff;
+  --bg-hover:      #e3e1db; /* Hover rengi */
+  --bg-input:      #ffffff;
+
+  /* Border */
+  --border-subtle: #d6d3cc;
+  --border-muted:  #bfbbae;
+  --border-active: #5c7c99;
+
+  /* Metin - Koyu füme/kahve */
+  --text-primary:  #2c2a28;
+  --text-secondary:#4a4744;
+  --text-muted:    #736f6a;
+  --text-link:     #356b9c;
+
+  /* Ana Aksan — Mavi/Lacivert (Beje uyumlu daha yumuşak lacivert) */
+  --accent:        #356b9c;
+  --accent-light:  #4a8bc2;
+  --accent-dark:   #22476b;
+  --accent-glow:   rgba(53, 107, 156, 0.15);
+}
+
+/* Editör arkaplanını tamamen düzelt */
+body.light-mode .sql-editor,
+body.light-mode .editor-loading {
+  background: var(--bg-panel);
+}
+
+/* Editör sekmeleri */
+body.light-mode .editor-tabs .editor-tab {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-subtle);
+  border-top: 2px solid transparent;
+}
+body.light-mode .editor-tabs .editor-tab.active {
+  background: var(--bg-panel);
+  color: var(--accent);
+  border-top: 2px solid var(--accent);
+  font-weight: 500;
+}
+
+/* Panelin Başlığı */
+body.light-mode .panel-eyebrow {
+  color: var(--accent);
+}
+
+/* Editör toolbar ve statusbar açık renk olsun */
+body.light-mode .editor-toolbar {
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+body.light-mode .editor-statusbar {
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border-subtle);
+}
+
+/* CodeMirror dış arkaplanını zorla */
+body.light-mode .cm-editor {
+  background-color: var(--bg-panel) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Geçmiş Tablosu ve Sonuçlar için okunabilirlik garantisi */
+body.light-mode .results-table th {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+body.light-mode .results-table td {
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* AG Grid Okunabilirlik Düzeltmeleri */
+body.light-mode .ag-theme-quartz {
+  --ag-background-color: var(--bg-panel);
+  --ag-header-background-color: var(--bg-secondary);
+  --ag-header-foreground-color: var(--text-primary);
+  --ag-data-color: var(--text-primary);
+  --ag-row-hover-color: var(--bg-hover);
+  --ag-border-color: var(--border-subtle);
+  --ag-row-border-color: var(--border-subtle);
+  --ag-odd-row-background-color: var(--bg-primary);
+}
+
+/* Çalıştır Butonu Düzeltmesi (Açık temada daha koyu yeşil) */
+body.light-mode .run-query-button {
+  color: #059669; /* Koyu Zümrüt Yeşili */
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.3);
+  font-weight: 600;
+}
+body.light-mode .run-query-button:hover {
+  background: rgba(16, 185, 129, 0.25);
+  border-color: #059669;
+}
+body.light-mode .run-query-button kbd {
+  color: #065f46;
+  border-color: rgba(16, 185, 129, 0.4);
+}
+

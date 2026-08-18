@@ -10,6 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.sqleditor.model.QueryUpdateReq;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -35,6 +37,19 @@ public class QueryController {
             return ResponseEntity.ok(queryService.execute(connection, request.getSql(), role, auth.getName(), token));
         } catch (SQLException | SecurityException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sorgu çalıştırılamadı: " + exception.getMessage(), exception);
+        }
+    }
+
+    @PostMapping("/update")
+    public ResponseEntity<java.util.Map<String, String>> updateCell(@RequestBody QueryUpdateReq req,
+                                                                    @RequestHeader("X-Connection-Token") String token,
+                                                                    org.springframework.security.core.Authentication auth) {
+        try (Connection connection = sessions.get(auth.getName(), token)) {
+            String role = auth.getAuthorities().iterator().next().getAuthority();
+            int updated = queryService.updateCell(connection, role, req);
+            return ResponseEntity.ok(java.util.Map.of("message", updated + " kayıt güncellendi."));
+        } catch (SQLException | SecurityException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Düzenleme başarısız: " + exception.getMessage(), exception);
         }
     }
 

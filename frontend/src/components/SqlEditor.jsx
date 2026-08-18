@@ -1,19 +1,60 @@
-import { useCallback, useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, MySQL } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiInfo } from 'react-icons/fi';
+import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft } from 'react-icons/fi';
+import { format } from 'sql-formatter';
 import { executeQuery, explainQuery, manageTransaction } from '../api/queryApi';
 import QueryResults from './QueryResults';
 
 const INITIAL_SQL = `-- Sorgunuzu buraya yazın\n`;
 
-export default function SqlEditor({ connectionToken, userRole }) {
+const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, ref) => {
   const [tabs, setTabs] = useState([{
     id: 1, title: 'SQL Query 1', query: INITIAL_SQL, notice: 'Sorguyu çalıştırmak için Ctrl + Enter kullanın.', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
   }]);
+
+  useImperativeHandle(ref, () => ({
+    openTab: (title, query) => {
+      const id = Date.now();
+      setTabs(prev => [...prev, {
+        id, title, query, notice: '', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
+      }]);
+      setActiveTabId(id);
+    }
+  }));
   const [activeTabId, setActiveTabId] = useState(1);
   const [autoCommit, setAutoCommit] = useState(true);
+  const [editorHeight, setEditorHeight] = useState(300);
+  const [isLightMode, setIsLightMode] = useState(() => document.body.classList.contains('light-mode'));
+  const isDragging = useRef(false);
+
+  useEffect(() => {
+    const handleThemeChange = () => setIsLightMode(document.body.classList.contains('light-mode'));
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, []);
+
+  const startDrag = (e) => {
+    e.preventDefault();
+    isDragging.current = true;
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', stopDrag);
+  };
+
+  const onDrag = (e) => {
+    if (!isDragging.current) return;
+    const newHeight = e.clientY - 40; 
+    if (newHeight > 100 && newHeight < window.innerHeight - 100) {
+      setEditorHeight(newHeight);
+    }
+  };
+
+  const stopDrag = () => {
+    isDragging.current = false;
+    document.removeEventListener('mousemove', onDrag);
+    document.removeEventListener('mouseup', stopDrag);
+  };
 
   const activeTab = tabs.find(t => t.id === activeTabId) || tabs[0];
 
@@ -37,6 +78,15 @@ export default function SqlEditor({ connectionToken, userRole }) {
     setTabs(newTabs);
     if (activeTabId === id) setActiveTabId(newTabs[0].id);
   };
+
+  const formatQuery = useCallback(() => {
+    try {
+      const formatted = format(activeTab.query, { language: 'mysql', keywordCase: 'upper' });
+      updateTab(activeTabId, { query: formatted, notice: 'Kod düzenlendi.' });
+    } catch (err) {
+      updateTab(activeTabId, { notice: 'Formatlama hatası: sözdizimi geçersiz olabilir.' });
+    }
+  }, [activeTab.query, activeTabId, updateTab]);
 
   const runQuery = useCallback(async () => {
     const executableSql = activeTab.query.replace(/^\s*--.*$/gm, '').trim();
@@ -67,7 +117,11 @@ export default function SqlEditor({ connectionToken, userRole }) {
       event.preventDefault();
       runQuery();
     }
-  }, [runQuery]);
+    if (event.shiftKey && event.altKey && (event.key === 'f' || event.key === 'F')) {
+      event.preventDefault();
+      formatQuery();
+    }
+  }, [runQuery, formatQuery]);
 
   useEffect(() => {
     if (connectionToken) {
@@ -95,9 +149,24 @@ export default function SqlEditor({ connectionToken, userRole }) {
     }
   };
 
+  const saveScript = useCallback(() => {
+    const executableSql = activeTab.query.trim();
+    if (!executableSql) {
+      updateTab(activeTabId, { notice: 'Kaydedilecek sorgu boş.' });
+      return;
+    }
+    const name = window.prompt('Bu betik için bir ad girin:');
+    if (!name) return;
+    const existing = JSON.parse(localStorage.getItem('savedScripts') || '[]');
+    existing.push({ name, query: executableSql, id: Date.now(), database: currentDatabase });
+    localStorage.setItem('savedScripts', JSON.stringify(existing));
+    window.dispatchEvent(new Event('savedScriptsUpdated'));
+    updateTab(activeTabId, { notice: `Betik '${name}' olarak kaydedildi.` });
+  }, [activeTab.query, activeTabId, currentDatabase, updateTab]);
+
   return (
-    <>
-      <section className="sql-editor" aria-label="SQL editörü" style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
+      <section className="sql-editor" aria-label="SQL editörü" style={{ display: 'flex', flexDirection: 'column', height: `${editorHeight}px`, flex: 'none', minHeight: 100 }}>
         <header className="editor-toolbar">
           <div className="editor-tabs">
             {tabs.map(tab => (
@@ -108,12 +177,14 @@ export default function SqlEditor({ connectionToken, userRole }) {
             <button className="new-tab-button" type="button" onClick={addNewTab} title="Yeni sekme aç">+</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: userRole === 'READ_ONLY' ? 'not-allowed' : 'pointer', opacity: userRole === 'READ_ONLY' ? 0.5 : 1 }}>
+            <button type="button" onClick={saveScript} title="Sorguyu Kaydet" style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}><FiCheck /> Kaydet</button>
+            <button type="button" onClick={formatQuery} title="Kodu Düzenle (Format)" style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}><FiAlignLeft /> Formatla</button>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)', cursor: userRole === 'READ_ONLY' ? 'not-allowed' : 'pointer', opacity: userRole === 'READ_ONLY' ? 0.5 : 1 }}>
               <input type="checkbox" checked={autoCommit} onChange={(e) => setAutoCommit(e.target.checked)} disabled={userRole === 'READ_ONLY'} />
               Auto-Commit
             </label>
-            <button type="button" onClick={runCommit} disabled={userRole === 'READ_ONLY' || autoCommit} title="Commit" style={{ background: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: (userRole === 'READ_ONLY' || autoCommit) ? 'not-allowed' : 'pointer' }}><FiCheck /> Commit</button>
-            <button type="button" onClick={runRollback} disabled={userRole === 'READ_ONLY' || autoCommit} title="Rollback" style={{ background: 'transparent', border: '1px solid #444', color: '#ccc', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: (userRole === 'READ_ONLY' || autoCommit) ? 'not-allowed' : 'pointer' }}><FiRotateCcw /> Rollback</button>
+            <button type="button" onClick={runCommit} disabled={userRole === 'READ_ONLY' || autoCommit} title="Commit" style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: (userRole === 'READ_ONLY' || autoCommit) ? 'not-allowed' : 'pointer' }}><FiCheck /> Commit</button>
+            <button type="button" onClick={runRollback} disabled={userRole === 'READ_ONLY' || autoCommit} title="Rollback" style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: (userRole === 'READ_ONLY' || autoCommit) ? 'not-allowed' : 'pointer' }}><FiRotateCcw /> Rollback</button>
             <button className="run-query-button" type="button" onClick={runQuery} disabled={activeTab.isRunning} title="Sorguyu çalıştır (Ctrl + Enter)"><FiPlay /> {activeTab.isRunning ? 'Çalışıyor…' : 'Çalıştır'} <kbd>Ctrl ↵</kbd></button>
           </div>
         </header>
@@ -121,7 +192,7 @@ export default function SqlEditor({ connectionToken, userRole }) {
           <CodeMirror
             value={activeTab.query}
             height="100%"
-            theme={oneDark}
+            theme={isLightMode ? 'light' : oneDark}
             extensions={[sql({ dialect: MySQL })]}
             onChange={(val) => updateTab(activeTabId, { query: val })}
             basicSetup={{ lineNumbers: true, highlightActiveLine: true, autocompletion: true, bracketMatching: true, foldGutter: true }}
@@ -131,14 +202,40 @@ export default function SqlEditor({ connectionToken, userRole }) {
           <span>{activeTab.notice}</span><span>MySQL · UTF-8</span>
         </footer>
       </section>
-      <QueryResults 
-        result={activeTab.queryResult} 
-        error={activeTab.queryError} 
-        explainResult={activeTab.explainResult}
-        explainError={activeTab.explainError}
-        isRunning={activeTab.isRunning} 
-        connectionToken={connectionToken} 
-      />
-    </>
+
+      {/* Resizer Handle */}
+      <div 
+        onMouseDown={startDrag}
+        style={{ 
+          height: '6px', 
+          cursor: 'row-resize', 
+          background: 'var(--bg-card)', 
+          borderTop: '1px solid var(--border-subtle)',
+          borderBottom: '1px solid var(--border-subtle)',
+          zIndex: 10,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          transition: 'background 0.2s'
+        }}
+        onMouseEnter={(e) => e.target.style.background = 'var(--accent)'}
+        onMouseLeave={(e) => e.target.style.background = 'var(--bg-card)'}
+      >
+        <div style={{ width: '40px', height: '2px', background: 'var(--border-subtle)', borderRadius: '2px' }} />
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+        <QueryResults 
+          result={activeTab.queryResult} 
+          error={activeTab.queryError} 
+          explainResult={activeTab.explainResult}
+          explainError={activeTab.explainError}
+          isRunning={activeTab.isRunning} 
+          connectionToken={connectionToken} 
+        />
+      </div>
+    </div>
   );
-}
+});
+
+export default SqlEditor;

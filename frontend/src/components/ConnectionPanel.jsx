@@ -222,7 +222,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
         </div>
 
         {/* Form */}
-        <div className="card-body">
+        <form className="card-body" onSubmit={(e) => { e.preventDefault(); handleConnect(); }}>
           {/* Test/Connect sonuç mesajı */}
           {testStatus && testResult && (
             <div className={`status-badge ${testStatus}`}>
@@ -427,10 +427,10 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
             <button
               id="btn-connect"
-              type="button"
+              type="submit"
               className="btn btn-primary"
-              onClick={handleConnect}
               disabled={isLoading}
+              title="Enter'a basarak bağlanabilirsiniz"
             >
               {isConnecting ? (
                 <><div className="btn-spinner" /> Bağlanıyor...</>
@@ -451,7 +451,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
               <button type="button" className="saved-delete" onClick={() => handleDeleteSaved(connection.id)} aria-label={`${connection.connectionName} bağlantısını sil`} title="Bağlantıyı sil"><FiTrash2 /></button>
             </div>)}
           </section>
-        </div>
+        </form>
 
         {/* Card Footer */}
         <div className="card-footer">

@@ -26,6 +26,20 @@ function App() {
   });
   const [authenticated, setAuthenticated] = useState(Boolean(sessionStorage.getItem('accessToken')));
   const [showAdminPanel, setShowAdminPanel] = useState(false);
+  const [isLightMode, setIsLightMode] = useState(() => localStorage.getItem('theme') === 'light');
+
+  useEffect(() => {
+    if (isLightMode) {
+      document.body.classList.add('light-mode');
+      localStorage.setItem('theme', 'light');
+    } else {
+      document.body.classList.remove('light-mode');
+      localStorage.setItem('theme', 'dark');
+    }
+    window.dispatchEvent(new Event('themeChanged'));
+  }, [isLightMode]);
+
+  const toggleTheme = () => setIsLightMode(!isLightMode);
 
   const handleConnected = (info) => {
     sessionStorage.setItem('connectionInfo', JSON.stringify(info));
@@ -48,7 +62,7 @@ function App() {
     };
     window.addEventListener('session-expired', onSessionExpired);
     return () => window.removeEventListener('session-expired', onSessionExpired);
-  }, [connectionInfo]);
+  }, [connectionInfo]); // Intentionally omitting handleLogout to avoid recreate loops
 
   if (!authenticated) return <AuthPanel onAuthenticated={() => setAuthenticated(true)} />;
 
@@ -64,6 +78,9 @@ function App() {
         )}
         <SchemaExplorer connectionInfo={connectionInfo} onDisconnect={handleDisconnect} userRole={userRole} />
         {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
+        <button onClick={toggleTheme} style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-md)' }} title={isLightMode ? "Karanlık Tema" : "Aydınlık Tema"}>
+          {isLightMode ? <span style={{fontSize:'18px'}}>🌙</span> : <span style={{fontSize:'18px'}}>☀️</span>}
+        </button>
       </div>
     );
   }
@@ -77,6 +94,9 @@ function App() {
       )}
       <ConnectionPanel onConnected={handleConnected} onLogout={handleLogout} />
       {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
+      <button onClick={toggleTheme} style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-md)' }} title={isLightMode ? "Karanlık Tema" : "Aydınlık Tema"}>
+        {isLightMode ? <span style={{fontSize:'18px'}}>🌙</span> : <span style={{fontSize:'18px'}}>☀️</span>}
+      </button>
     </div>
   );
 }
