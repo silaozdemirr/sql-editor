@@ -27,32 +27,117 @@ public class SchemaService {
         List<TableInfo> views  = new ArrayList<>();
 
         try (conn) {
+            DatabaseMetaData metaData = conn.getMetaData();
+            String dbProductName = metaData.getDatabaseProductName().toLowerCase();
 
-            String sql = """
-                SELECT
-                    t.TABLE_NAME,
-                    t.TABLE_TYPE,
-                    COALESCE(t.TABLE_ROWS, 0) AS TABLE_ROWS
-                FROM information_schema.TABLES t
-                WHERE t.TABLE_SCHEMA = ?
-                ORDER BY t.TABLE_TYPE DESC, t.TABLE_NAME ASC
-                """;
+            // Oracle ve PostgreSQL gibi sistemlerde catalog null dönebilir, schema/kullanıcı adını kullan
+            String actualDbName = databaseName;
+            if (actualDbName == null || actualDbName.isEmpty()) {
+                actualDbName = conn.getSchema();
+            }
+            if (actualDbName == null || actualDbName.isEmpty()) {
+                actualDbName = metaData.getUserName();
+            }
 
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, databaseName);
-
-                try (ResultSet rs = ps.executeQuery()) {
+            if (dbProductName.contains("oracle")) {
+                // Oracle Database
+                try (ResultSet rs = metaData.getTables(null, actualDbName.toUpperCase(), "%", new String[]{"TABLE", "VIEW"})) {
                     while (rs.next()) {
                         String name = rs.getString("TABLE_NAME");
                         String type = rs.getString("TABLE_TYPE");
-                        int    rows = rs.getInt("TABLE_ROWS");
-
-                        TableInfo info = new TableInfo(name, type, rows);
-
-                        if ("VIEW".equals(type)) {
+                        TableInfo info = new TableInfo(name, type, 0);
+                        if ("VIEW".equalsIgnoreCase(type)) {
                             views.add(info);
                         } else {
                             tables.add(info);
+                        }
+                    }
+                }
+            } else if (dbProductName.contains("microsoft") || dbProductName.contains("sql server")) {
+                // SQL Server
+                String sql = """
+                    SELECT
+                        t.TABLE_NAME,
+                        t.TABLE_TYPE,
+                        0 AS TABLE_ROWS
+                    FROM information_schema.TABLES t
+                    WHERE t.TABLE_CATALOG = ?
+                    ORDER BY t.TABLE_TYPE DESC, t.TABLE_NAME ASC
+                    """;
+
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, actualDbName);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            String name = rs.getString("TABLE_NAME");
+                            String type = rs.getString("TABLE_TYPE");
+
+                            TableInfo info = new TableInfo(name, type, 0);
+                            if ("VIEW".equals(type)) {
+                                views.add(info);
+                            } else {
+                                tables.add(info);
+                            }
+                        }
+                    }
+                }
+            } else if (dbProductName.contains("postgresql")) {
+                // PostgreSQL
+                String sql = """
+                    SELECT
+                        table_name AS TABLE_NAME,
+                        table_type AS TABLE_TYPE,
+                        0 AS TABLE_ROWS
+                    FROM information_schema.tables
+                    WHERE table_catalog = ? AND table_schema NOT IN ('information_schema', 'pg_catalog')
+                    ORDER BY table_type DESC, table_name ASC
+                    """;
+
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, databaseName);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            String name = rs.getString("TABLE_NAME");
+                            String type = rs.getString("TABLE_TYPE");
+                            TableInfo info = new TableInfo(name, type, 0);
+                            if ("VIEW".equalsIgnoreCase(type)) {
+                                views.add(info);
+                            } else {
+                                tables.add(info);
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Default / MySQL
+                String sql = """
+                    SELECT
+                        t.TABLE_NAME,
+                        t.TABLE_TYPE,
+                        COALESCE(t.TABLE_ROWS, 0) AS TABLE_ROWS
+                    FROM information_schema.TABLES t
+                    WHERE t.TABLE_SCHEMA = ?
+                    ORDER BY t.TABLE_TYPE DESC, t.TABLE_NAME ASC
+                    """;
+
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, databaseName);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            String name = rs.getString("TABLE_NAME");
+                            String type = rs.getString("TABLE_TYPE");
+                            int    rows = rs.getInt("TABLE_ROWS");
+
+                            TableInfo info = new TableInfo(name, type, rows);
+
+                            if ("VIEW".equals(type)) {
+                                views.add(info);
+                            } else {
+                                tables.add(info);
+                            }
                         }
                     }
                 }
@@ -73,43 +158,162 @@ public class SchemaService {
         List<ColumnInfo> columns = new ArrayList<>();
 
         try (conn) {
+            DatabaseMetaData metaData = conn.getMetaData();
+            String dbProductName = metaData.getDatabaseProductName().toLowerCase();
 
-            String sql = """
-                SELECT
-                    c.COLUMN_NAME,
-                    c.DATA_TYPE,
-                    c.COLUMN_TYPE,
-                    c.IS_NULLABLE,
-                    c.COLUMN_KEY,
-                    c.COLUMN_DEFAULT,
-                    c.EXTRA
-                FROM information_schema.COLUMNS c
-                WHERE c.TABLE_SCHEMA = ?
-                  AND c.TABLE_NAME   = ?
-                ORDER BY c.ORDINAL_POSITION
-                """;
+            String actualDbName = databaseName;
+            if (actualDbName == null || actualDbName.isEmpty()) {
+                actualDbName = conn.getSchema();
+            }
+            if (actualDbName == null || actualDbName.isEmpty()) {
+                actualDbName = metaData.getUserName();
+            }
 
-            try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                ps.setString(1, databaseName);
-                ps.setString(2, tableName);
+            if (dbProductName.contains("oracle")) {
+                String sql = """
+                    SELECT
+                        c.COLUMN_NAME,
+                        c.DATA_TYPE,
+                        c.DATA_TYPE AS COLUMN_TYPE,
+                        c.NULLABLE,
+                        '' AS COLUMN_KEY,
+                        c.DATA_DEFAULT AS COLUMN_DEFAULT,
+                        '' AS EXTRA
+                    FROM ALL_TAB_COLUMNS c
+                    WHERE c.OWNER = ?
+                      AND c.TABLE_NAME = ?
+                    ORDER BY c.COLUMN_ID
+                    """;
 
-                try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) {
-                        String key = rs.getString("COLUMN_KEY");
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, actualDbName.toUpperCase());
+                    ps.setString(2, tableName.toUpperCase());
 
-                        ColumnInfo col = ColumnInfo.builder()
-                                .name(rs.getString("COLUMN_NAME"))
-                                .dataType(rs.getString("DATA_TYPE"))
-                                .fullType(rs.getString("COLUMN_TYPE"))
-                                .nullable("YES".equals(rs.getString("IS_NULLABLE")))
-                                .primaryKey("PRI".equals(key))
-                                .foreignKey("MUL".equals(key))
-                                .unique("UNI".equals(key))
-                                .defaultValue(rs.getString("COLUMN_DEFAULT"))
-                                .extra(rs.getString("EXTRA"))
-                                .build();
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            ColumnInfo col = ColumnInfo.builder()
+                                    .name(rs.getString("COLUMN_NAME"))
+                                    .dataType(rs.getString("DATA_TYPE"))
+                                    .fullType(rs.getString("COLUMN_TYPE"))
+                                    .nullable("Y".equals(rs.getString("NULLABLE")))
+                                    .primaryKey(false) // Tam doğruluk için constraint tablolarına bakılmalı
+                                    .foreignKey(false)
+                                    .unique(false)
+                                    .defaultValue(rs.getString("COLUMN_DEFAULT"))
+                                    .extra(rs.getString("EXTRA"))
+                                    .build();
+                            columns.add(col);
+                        }
+                    }
+                }
+            } else if (dbProductName.contains("microsoft") || dbProductName.contains("sql server")) {
+                // SQL Server
+                String sql = """
+                    SELECT
+                        c.COLUMN_NAME,
+                        c.DATA_TYPE,
+                        c.DATA_TYPE AS COLUMN_TYPE,
+                        c.IS_NULLABLE,
+                        '' AS COLUMN_KEY,
+                        c.COLUMN_DEFAULT,
+                        '' AS EXTRA
+                    FROM information_schema.COLUMNS c
+                    WHERE c.TABLE_CATALOG = ?
+                      AND c.TABLE_NAME   = ?
+                    ORDER BY c.ORDINAL_POSITION
+                    """;
 
-                        columns.add(col);
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, actualDbName);
+                    ps.setString(2, tableName);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            ColumnInfo col = ColumnInfo.builder()
+                                    .name(rs.getString("COLUMN_NAME"))
+                                    .dataType(rs.getString("DATA_TYPE"))
+                                    .fullType(rs.getString("COLUMN_TYPE"))
+                                    .nullable("YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")))
+                                    .primaryKey(false)
+                                    .defaultValue(rs.getString("COLUMN_DEFAULT"))
+                                    .extra(rs.getString("EXTRA"))
+                                    .build();
+                            columns.add(col);
+                        }
+                    }
+                }
+            } else if (dbProductName.contains("postgresql")) {
+                String sql = """
+                    SELECT
+                        column_name AS COLUMN_NAME,
+                        data_type AS DATA_TYPE,
+                        data_type AS COLUMN_TYPE,
+                        is_nullable AS IS_NULLABLE,
+                        '' AS COLUMN_KEY,
+                        column_default AS COLUMN_DEFAULT,
+                        '' AS EXTRA
+                    FROM information_schema.columns
+                    WHERE table_catalog = ? AND table_name = ?
+                    ORDER BY ordinal_position
+                    """;
+
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, databaseName);
+                    ps.setString(2, tableName);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            ColumnInfo col = ColumnInfo.builder()
+                                    .name(rs.getString("COLUMN_NAME"))
+                                    .dataType(rs.getString("DATA_TYPE"))
+                                    .fullType(rs.getString("COLUMN_TYPE"))
+                                    .nullable("YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")))
+                                    .primaryKey(false)
+                                    .defaultValue(rs.getString("COLUMN_DEFAULT"))
+                                    .extra(rs.getString("EXTRA"))
+                                    .build();
+                            columns.add(col);
+                        }
+                    }
+                }
+            } else {
+                String sql = """
+                    SELECT
+                        c.COLUMN_NAME,
+                        c.DATA_TYPE,
+                        c.COLUMN_TYPE,
+                        c.IS_NULLABLE,
+                        c.COLUMN_KEY,
+                        c.COLUMN_DEFAULT,
+                        c.EXTRA
+                    FROM information_schema.COLUMNS c
+                    WHERE c.TABLE_SCHEMA = ?
+                      AND c.TABLE_NAME   = ?
+                    ORDER BY c.ORDINAL_POSITION
+                    """;
+
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    ps.setString(1, databaseName);
+                    ps.setString(2, tableName);
+
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            String key = rs.getString("COLUMN_KEY");
+
+                            ColumnInfo col = ColumnInfo.builder()
+                                    .name(rs.getString("COLUMN_NAME"))
+                                    .dataType(rs.getString("DATA_TYPE"))
+                                    .fullType(rs.getString("COLUMN_TYPE"))
+                                    .nullable("YES".equals(rs.getString("IS_NULLABLE")))
+                                    .primaryKey("PRI".equals(key))
+                                    .foreignKey("MUL".equals(key))
+                                    .unique("UNI".equals(key))
+                                    .defaultValue(rs.getString("COLUMN_DEFAULT"))
+                                    .extra(rs.getString("EXTRA"))
+                                    .build();
+
+                            columns.add(col);
+                        }
                     }
                 }
             }
@@ -146,9 +350,31 @@ public class SchemaService {
             DatabaseMetaData metaData = conn.getMetaData();
             
             List<String> tableNames = new ArrayList<>();
-            try (ResultSet rs = metaData.getTables(databaseName, null, "%", new String[]{"TABLE"})) {
+            // Oracle için catalog genelde null, schema ise kullanıcı adıdır.
+            // Fakat burada genel geçerlilik için hem catalog hem schema olarak databaseName verebiliriz,
+            // veya JDBC driver'ın varsayılan davranışını kullanması için null, null verebiliriz.
+            // En güvenlisi MySQL için catalog, Oracle için schema'ya denk gelecek şekilde arama yapmaktır.
+            try (ResultSet rs = metaData.getTables(null, null, "%", new String[]{"TABLE", "VIEW"})) {
                 while (rs.next()) {
-                    tableNames.add(rs.getString("TABLE_NAME"));
+                    String tableCat = rs.getString("TABLE_CAT");
+                    String tableSchem = rs.getString("TABLE_SCHEM");
+                    String tableName = rs.getString("TABLE_NAME");
+                    String tableType = rs.getString("TABLE_TYPE");
+                    
+                    // Eğer databaseName belirtilmişse, ve cat/schema ile uyuşmuyorsa filtrele
+                    if (databaseName != null && !databaseName.isEmpty()) {
+                        if ((tableCat != null && !tableCat.equalsIgnoreCase(databaseName)) &&
+                            (tableSchem != null && !tableSchem.equalsIgnoreCase(databaseName))) {
+                            // Oracle sistem tablolarını veya diğer schemaları atla
+                            if (!databaseName.equalsIgnoreCase(tableSchem)) {
+                                continue;
+                            }
+                        }
+                    }
+                    
+                    if ("TABLE".equalsIgnoreCase(tableType)) {
+                        tableNames.add(tableName);
+                    }
                 }
             }
 

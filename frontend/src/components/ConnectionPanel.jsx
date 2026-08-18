@@ -4,39 +4,192 @@ import {
   FiCheckCircle, FiAlertCircle, FiLoader, FiWifi, FiZap,
   FiInfo, FiLogOut, FiSave, FiTrash2
 } from 'react-icons/fi';
-import { SiMysql } from 'react-icons/si';
+import { 
+  SiMysql, SiPostgresql, SiSqlite, SiMariadb, 
+  SiMongodb, SiApachecouchdb, SiRedis, SiApachecassandra, 
+  SiApachehbase, SiScylladb, SiNeo4J, SiArangodb 
+} from 'react-icons/si';
+import { GrOracle } from 'react-icons/gr';
+import { DiMsqlServer } from 'react-icons/di';
+import { FaAws } from 'react-icons/fa';
 import { testConnection, connectToDatabase, connectSavedConnection, deleteSavedConnection, getSavedConnections, saveConnection } from '../api/connectionApi';
 
 // Veritabanı tip konfigürasyonları
 const DB_TYPES = [
+  // --- SQL (İlişkisel) ---
   {
     key: 'MYSQL',
+    category: 'SQL',
     label: 'MySQL',
-    icon: '🐬',
+    icon: <SiMysql color="#4479A1" />,
     defaultPort: 3306,
     dotClass: 'mysql',
-    placeholder: {
-      host: 'localhost',
-    },
+    placeholder: { host: 'localhost' },
   },
   {
     key: 'POSTGRESQL',
+    category: 'SQL',
     label: 'PostgreSQL',
-    icon: '🐘',
+    icon: <SiPostgresql color="#336791" />,
     defaultPort: 5432,
     dotClass: 'pg',
+    placeholder: { host: 'localhost', database: 'kitaplik_db', username: 'postgres' },
+  },
+  {
+    key: 'ORACLE',
+    category: 'SQL',
+    label: 'Oracle',
+    icon: <GrOracle color="#F80000" />,
+    defaultPort: 1521,
+    dotClass: 'oracle',
+    placeholder: { host: 'localhost', database: 'FREEPDB1', username: 'system' },
+  },
+  {
+    key: 'MSSQL',
+    category: 'SQL',
+    label: 'SQL Server',
+    icon: <DiMsqlServer color="#CC292B" />,
+    defaultPort: 1433,
+    dotClass: 'mssql',
+    placeholder: { host: 'localhost', database: 'E_TICARET', username: 'sa' },
+  },
+  {
+    key: 'SQLITE',
+    category: 'SQL',
+    label: 'SQLite',
+    icon: <SiSqlite color="#003B57" />,
+    defaultPort: null,
+    dotClass: 'sqlite',
     badge: 'yakında',
     disabled: true,
-    placeholder: {
-      host: 'localhost',
-      database: 'postgres',
-      username: 'postgres',
-    },
+  },
+  {
+    key: 'MARIADB',
+    category: 'SQL',
+    label: 'MariaDB',
+    icon: <SiMariadb color="#003545" />,
+    defaultPort: 3306,
+    dotClass: 'mariadb',
+    badge: 'yakında',
+    disabled: true,
+  },
+
+  // --- NoSQL (İlişkisel Olmayan) ---
+  {
+    key: 'MONGODB',
+    category: 'NOSQL',
+    label: 'MongoDB',
+    icon: <SiMongodb color="#47A248" />,
+    defaultPort: 27017,
+    dotClass: 'mongodb',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'COUCHDB',
+    category: 'NOSQL',
+    label: 'CouchDB',
+    icon: <SiApachecouchdb color="#E3242B" />,
+    defaultPort: 5984,
+    dotClass: 'couchdb',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'REDIS',
+    category: 'NOSQL',
+    label: 'Redis',
+    icon: <SiRedis color="#DC382D" />,
+    defaultPort: 6379,
+    dotClass: 'redis',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'MEMCACHED',
+    category: 'NOSQL',
+    label: 'Memcached',
+    icon: <FiDatabase color="#E1251B" />,
+    defaultPort: 11211,
+    dotClass: 'memcached',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'DYNAMODB',
+    category: 'NOSQL',
+    label: 'DynamoDB',
+    icon: <FaAws color="#FF9900" />,
+    defaultPort: 8000,
+    dotClass: 'dynamodb',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'CASSANDRA',
+    category: 'NOSQL',
+    label: 'Cassandra',
+    icon: <SiApachecassandra color="#1287B1" />,
+    defaultPort: 9042,
+    dotClass: 'cassandra',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'HBASE',
+    category: 'NOSQL',
+    label: 'HBase',
+    icon: <SiApachehbase color="#7B2114" />,
+    defaultPort: 16000,
+    dotClass: 'hbase',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'SCYLLADB',
+    category: 'NOSQL',
+    label: 'ScyllaDB',
+    icon: <SiScylladb color="#5ACED3" />,
+    defaultPort: 9042,
+    dotClass: 'scylladb',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'NEO4J',
+    category: 'NOSQL',
+    label: 'Neo4j',
+    icon: <SiNeo4J color="#4581C3" />,
+    defaultPort: 7687,
+    dotClass: 'neo4j',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'NEPTUNE',
+    category: 'NOSQL',
+    label: 'Neptune',
+    icon: <FaAws color="#232F3E" />,
+    defaultPort: 8182,
+    dotClass: 'neptune',
+    badge: 'yakında',
+    disabled: true,
+  },
+  {
+    key: 'ARANGODB',
+    category: 'NOSQL',
+    label: 'ArangoDB',
+    icon: <SiArangodb color="#D3E021" />,
+    defaultPort: 8529,
+    dotClass: 'arangodb',
+    badge: 'yakında',
+    disabled: true,
   },
 ];
 
 const ConnectionPanel = ({ onConnected, onLogout }) => {
   const [selectedDb, setSelectedDb] = useState('MYSQL');
+  const [showForm, setShowForm] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [testStatus, setTestStatus] = useState(null); // null | 'testing' | 'success' | 'error'
   const [connectStatus, setConnectStatus] = useState(null);
@@ -69,15 +222,16 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
     if (db.disabled) return;
     const dbConf = DB_TYPES.find(d => d.key === db.key);
     setSelectedDb(db.key);
+    setShowForm(true);
     setTestStatus(null);
     setTestResult(null);
     setForm(prev => ({
       ...prev,
       dbType: db.key,
       port: dbConf.defaultPort,
-      host: 'localhost',
-      database: '',
-      username: '',
+      host: dbConf.placeholder?.host || 'localhost',
+      database: dbConf.placeholder?.database || '',
+      username: dbConf.placeholder?.username || '',
     }));
   };
 
@@ -202,27 +356,85 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
       </div>
 
       {/* Connection Card */}
-      <div className="connection-card">
-        {/* DB Type Tabs */}
-        <div className="card-tabs">
-          {DB_TYPES.map(db => (
-            <button
-              key={db.key}
-              id={`tab-${db.key.toLowerCase()}`}
-              className={`tab-btn ${selectedDb === db.key ? 'active' : ''} ${db.disabled ? 'disabled' : ''}`}
-              onClick={() => handleDbChange(db)}
-              disabled={db.disabled}
-              title={db.disabled ? 'Yakında eklenecek' : db.label}
-            >
-              <span className={`db-dot ${db.dotClass}`}></span>
-              {db.icon} {db.label}
-              {db.badge && <span className="tab-badge">{db.badge}</span>}
-            </button>
-          ))}
-        </div>
+      <div className="connection-card" style={{ maxWidth: !showForm ? '950px' : '580px', transition: 'max-width 0.3s ease' }}>
+        {!showForm ? (
+          <div className="db-selection-screen" style={{ padding: '2.5rem', textAlign: 'center' }}>
+            <h2 style={{ fontSize: '1.4rem', marginBottom: '2rem', fontWeight: 600, color: 'var(--text-main)' }}>Hangi veritabanına bağlanmak istiyorsun?</h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem', alignItems: 'start' }}>
+              
+              <div style={{ textAlign: 'left' }}>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>İlişkisel Veritabanları (RDBMS - SQL)</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.4', minHeight: '40px' }}>
+                  Tablolar, satırlar ve sütunlar aracılığıyla yapılandırılmış verileri tutar; ACID prensiplerini ve SQL standardını kullanır.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
+                  {DB_TYPES.filter(db => db.category === 'SQL').map(db => (
+                    <button
+                      key={db.key}
+                      className={`db-selection-btn ${db.disabled ? 'disabled' : ''}`}
+                      onClick={() => handleDbChange(db)}
+                      disabled={db.disabled}
+                      title={db.disabled ? 'Yakında eklenecek' : db.label}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: '1.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border-subtle)',
+                        background: 'var(--bg-layer-2)', cursor: db.disabled ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease', position: 'relative'
+                      }}
+                    >
+                      <span style={{ fontSize: '2.5rem', marginBottom: '0.75rem', opacity: db.disabled ? 0.5 : 1 }}>{db.icon}</span>
+                      <span style={{ fontWeight: 600, color: db.disabled ? 'var(--text-muted)' : 'var(--text-main)', fontSize: '0.9rem' }}>{db.label}</span>
+                      {db.badge && <span className="tab-badge" style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.8 }}>{db.badge}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-        {/* Form */}
-        <form className="card-body" onSubmit={(e) => { e.preventDefault(); handleConnect(); }}>
+              <div style={{ textAlign: 'left' }}>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--text-main)' }}>İlişkisel Olmayan Veritabanları (NoSQL)</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.4', minHeight: '40px' }}>
+                  Esnek şemalar, yüksek yatay ölçeklenebilirlik ve yapısal olmayan/yarı yapılandırılmış veriler için optimize edilmiştir.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
+                  {DB_TYPES.filter(db => db.category === 'NOSQL').map(db => (
+                    <button
+                      key={db.key}
+                      className={`db-selection-btn ${db.disabled ? 'disabled' : ''}`}
+                      onClick={() => handleDbChange(db)}
+                      disabled={db.disabled}
+                      title={db.disabled ? 'Yakında eklenecek' : db.label}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: '1.5rem 1rem', borderRadius: '12px', border: '1px solid var(--border-subtle)',
+                        background: 'var(--bg-layer-2)', cursor: db.disabled ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease', position: 'relative'
+                      }}
+                    >
+                      <span style={{ fontSize: '2.5rem', marginBottom: '0.75rem', opacity: db.disabled ? 0.5 : 1 }}>{db.icon}</span>
+                      <span style={{ fontWeight: 600, color: db.disabled ? 'var(--text-muted)' : 'var(--text-main)', fontSize: '0.9rem' }}>{db.label}</span>
+                      {db.badge && <span className="tab-badge" style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.8 }}>{db.badge}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center' }}>
+              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+                &larr; Geri dön
+              </button>
+              <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-main)' }}>
+                <span className={`db-dot ${currentDb?.dotClass}`}></span>
+                {currentDb?.icon} {currentDb?.label} Bağlantısı
+              </div>
+            </div>
+
+            {/* Form */}
+            <form className="card-body" onSubmit={(e) => { e.preventDefault(); handleConnect(); }}>
           {/* Test/Connect sonuç mesajı */}
           {testStatus && testResult && (
             <div className={`status-badge ${testStatus}`}>
@@ -298,7 +510,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
           <div className="form-row single">
             <div className="form-group">
               <label className="form-label" htmlFor="database">
-                Veritabanı <span className="required">*</span>
+                {selectedDb === 'ORACLE' ? 'Service Name / SID' : 'Veritabanı Adı'} <span className="required">*</span>
               </label>
               <div className="input-wrapper">
                 <FiDatabase className="input-icon" />
@@ -309,7 +521,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
                   className="form-input"
                   value={form.database}
                   onChange={handleChange}
-                  placeholder="Örn. hastane_db"
+                  placeholder={currentDb?.placeholder?.database || 'okul_db'}
                   disabled={isLoading}
                   autoComplete="off"
                 />
@@ -457,10 +669,12 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
         <div className="card-footer">
           <span className="footer-tip">
             <FiInfo size={12} />
-            Docker ile MySQL container'ı çalıştırdığından emin ol
+            Docker ile {currentDb?.label} container'ı çalıştırdığından emin ol
           </span>
           <span className="footer-version">v0.1.0-alpha</span>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

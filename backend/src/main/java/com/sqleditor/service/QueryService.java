@@ -138,28 +138,75 @@ public class QueryService {
     }
 
     public QueryResponse explain(Connection connection, String sql) throws SQLException {
-        String explainSql = "EXPLAIN " + sql;
+        String dbProductName = connection.getMetaData().getDatabaseProductName().toLowerCase();
+        boolean isOracle = dbProductName.contains("oracle");
+        boolean isSqlServer = dbProductName.contains("microsoft") || dbProductName.contains("sql server");
+
         long start = System.currentTimeMillis();
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(30);
-            try (ResultSet resultSet = statement.executeQuery(explainSql)) {
-                ResultSetMetaData metaData = resultSet.getMetaData();
-                int columnCount = metaData.getColumnCount();
-                List<String> columns = new ArrayList<>();
-                for (int index = 1; index <= columnCount; index++) {
-                    columns.add(metaData.getColumnLabel(index));
-                }
 
-                List<List<String>> rows = new ArrayList<>();
-                while (resultSet.next()) {
-                    List<String> row = new ArrayList<>();
-                    for (int index = 1; index <= columnCount; index++) {
-                        row.add(formatValue(resultSet.getObject(index)));
+            if (isOracle) {
+                // Oracle: Önce EXPLAIN PLAN FOR çalıştırılır
+                statement.execute("EXPLAIN PLAN FOR " + sql);
+                // Ardından DBMS_XPLAN ile sonuç okunur
+                try (ResultSet resultSet = statement.executeQuery("SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY())")) {
+                    List<String> columns = List.of("PLAN_TABLE_OUTPUT");
+                    List<List<String>> rows = new ArrayList<>();
+                    while (resultSet.next()) {
+                        rows.add(List.of(formatValue(resultSet.getObject(1))));
                     }
-                    rows.add(row);
+                    long elapsed = System.currentTimeMillis() - start;
+                    return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
                 }
-                long elapsed = System.currentTimeMillis() - start;
-                return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
+            } else if (isSqlServer) {
+                // MSSQL: SET SHOWPLAN_ALL ON çalıştırılır
+                statement.execute("SET SHOWPLAN_ALL ON");
+                try {
+                    try (ResultSet resultSet = statement.executeQuery(sql)) {
+                        ResultSetMetaData metaData = resultSet.getMetaData();
+                        int columnCount = metaData.getColumnCount();
+                        List<String> columns = new ArrayList<>();
+                        for (int index = 1; index <= columnCount; index++) {
+                            columns.add(metaData.getColumnLabel(index));
+                        }
+
+                        List<List<String>> rows = new ArrayList<>();
+                        while (resultSet.next()) {
+                            List<String> row = new ArrayList<>();
+                            for (int index = 1; index <= columnCount; index++) {
+                                row.add(formatValue(resultSet.getObject(index)));
+                            }
+                            rows.add(row);
+                        }
+                        long elapsed = System.currentTimeMillis() - start;
+                        return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
+                    }
+                } finally {
+                    statement.execute("SET SHOWPLAN_ALL OFF");
+                }
+            } else {
+                // MySQL / PostgreSQL default behavior
+                String explainSql = "EXPLAIN " + sql;
+                try (ResultSet resultSet = statement.executeQuery(explainSql)) {
+                    ResultSetMetaData metaData = resultSet.getMetaData();
+                    int columnCount = metaData.getColumnCount();
+                    List<String> columns = new ArrayList<>();
+                    for (int index = 1; index <= columnCount; index++) {
+                        columns.add(metaData.getColumnLabel(index));
+                    }
+
+                    List<List<String>> rows = new ArrayList<>();
+                    while (resultSet.next()) {
+                        List<String> row = new ArrayList<>();
+                        for (int index = 1; index <= columnCount; index++) {
+                            row.add(formatValue(resultSet.getObject(index)));
+                        }
+                        rows.add(row);
+                    }
+                    long elapsed = System.currentTimeMillis() - start;
+                    return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
+                }
             }
         }
     }

@@ -114,6 +114,10 @@ public class ConnectionService {
                     "jdbc:sqlserver://%s:%d;databaseName=%s;encrypt=false",
                     request.getHost(), request.getPort(), request.getDatabase()
             );
+            case "ORACLE" -> String.format(
+                    "jdbc:oracle:thin:@//%s:%d/%s",
+                    request.getHost(), request.getPort(), request.getDatabase()
+            );
             default -> throw new IllegalArgumentException("Desteklenmeyen veritabanı tipi: " + request.getDbType());
         };
     }

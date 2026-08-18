@@ -58,7 +58,7 @@ public class ConnectionSessionService {
         String tokenHash = hasher.hash(token);
         List<Stored> rows = db.query("""
                 select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
-                from connection_sessions where user_id=? and token_hash=? and expires_at>current_timestamp
+                from connection_sessions where user_id=? and token_hash=?
                 """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3),
                 rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
         if (rows.isEmpty())
@@ -82,10 +82,11 @@ public class ConnectionSessionService {
 
     @Scheduled(fixedRate = 60000)
     public void evictExpired() {
-        List<String> hashes = db.query("select token_hash from connection_sessions where expires_at <= current_timestamp", 
-                (rs, rowNum) -> rs.getString(1));
+        Timestamp now = Timestamp.from(Instant.now());
+        List<String> hashes = db.query("select token_hash from connection_sessions where expires_at <= ?", 
+                (rs, rowNum) -> rs.getString(1), now);
         if (!hashes.isEmpty()) {
-            db.update("delete from connection_sessions where expires_at <= current_timestamp");
+            db.update("delete from connection_sessions where expires_at <= ?", now);
             hashes.forEach(this::closePool);
         }
     }
@@ -162,10 +163,13 @@ public class ConnectionSessionService {
     }
 
     private String url(Stored s) {
-        return switch (s.type()) {
+        return switch (s.type().toUpperCase()) {
             case "MYSQL" -> "jdbc:mysql://" + s.host() + ":" + s.port() + "/" + s.database()
                     + "?useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8&sessionVariables=time_zone='%2B03:00'";
-            default -> throw new IllegalArgumentException("Desteklenmeyen veritabanı tipi");
+            case "POSTGRESQL" -> "jdbc:postgresql://" + s.host() + ":" + s.port() + "/" + s.database();
+            case "MSSQL" -> "jdbc:sqlserver://" + s.host() + ":" + s.port() + ";databaseName=" + s.database() + ";encrypt=false";
+            case "ORACLE" -> "jdbc:oracle:thin:@//" + s.host() + ":" + s.port() + "/" + s.database();
+            default -> throw new IllegalArgumentException("Desteklenmeyen veritabanı tipi: " + s.type());
         };
     }
 
