@@ -45,3 +45,10 @@ Thumbs.db
 # OS
 # ========================
 desktop.ini
+
+# Seed files
+/*.sql
+*_seed.py
+generate_*.py
+TestOracle.java
+docker/cd
