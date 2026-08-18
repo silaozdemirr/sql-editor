@@ -194,7 +194,7 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect, userRole 
           <SavedScriptsGroup onOpenScript={(name, query) => sqlEditorRef.current?.openTab(name, query)} currentDatabase={schema?.databaseName || connectionInfo.database || 'varsayilan_db'} />
         </ul>}
       </section>
-      <footer className="explorer-footer"><span><span className="connected-indicator" /> MySQL bağlı</span><button className="disconnect-link" type="button" onClick={onDisconnect}><FiLogOut /> Bağlantıyı kes</button></footer>
+      <footer className="explorer-footer"><span><span className="connected-indicator" /> {connectionInfo.dbType === 'POSTGRESQL' ? 'PostgreSQL' : connectionInfo.dbType === 'ORACLE' ? 'Oracle' : connectionInfo.dbType === 'MSSQL' ? 'SQL Server' : connectionInfo.dbType === 'SQLITE' ? 'SQLite' : connectionInfo.dbType === 'MARIADB' ? 'MariaDB' : 'MySQL'} bağlı</span><button className="disconnect-link" type="button" onClick={onDisconnect}><FiLogOut /> Bağlantıyı kes</button></footer>
     </aside>
     <section className="workspace-main">
       <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor </section>}>
@@ -224,3 +224,4 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect, userRole 
     )}
   </main>;
 }
+

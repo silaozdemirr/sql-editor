@@ -52,3 +52,4 @@ desktop.ini
 generate_*.py
 TestOracle.java
 docker/cd
+*.db

@@ -60,31 +60,29 @@ const DB_TYPES = [
     icon: <SiSqlite color="#003B57" />,
     defaultPort: null,
     dotClass: 'sqlite',
-    badge: 'yakında',
-    disabled: true,
+    placeholder: { database: 'C:\\Users\\silao\\Desktop\\SQLeditör\\test.db' },
   },
   {
     key: 'MARIADB',
     category: 'SQL',
     label: 'MariaDB',
     icon: <SiMariadb color="#003545" />,
-    defaultPort: 3306,
+    defaultPort: 3307,
     dotClass: 'mariadb',
-    badge: 'yakında',
-    disabled: true,
+    placeholder: { host: 'localhost', database: 'sirket_db', username: 'mariadbuser' },
   },
 
   // --- NoSQL (İlişkisel Olmayan) ---
   {
-    key: 'MONGODB',
-    category: 'NOSQL',
-    label: 'MongoDB',
-    icon: <SiMongodb color="#47A248" />,
-    defaultPort: 27017,
-    dotClass: 'mongodb',
-    badge: 'yakında',
-    disabled: true,
-  },
+      key: 'MONGODB',
+      category: 'NoSQL',
+      label: 'MongoDB',
+      icon: <SiMongodb color="#47A248" />,
+      defaultPort: 27017,
+      dotClass: 'mongodb',
+      badge: 'yakında',
+      disabled: true,
+    },
   {
     key: 'COUCHDB',
     category: 'NOSQL',
@@ -229,9 +227,10 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
       ...prev,
       dbType: db.key,
       port: dbConf.defaultPort,
-      host: dbConf.placeholder?.host || 'localhost',
-      database: dbConf.placeholder?.database || '',
-      username: dbConf.placeholder?.username || '',
+        host: dbConf.placeholder?.host || 'localhost',
+        database: dbConf.defaultValues?.database || dbConf.placeholder?.database || '',
+        username: dbConf.defaultValues?.username || dbConf.placeholder?.username || '',
+        password: dbConf.defaultValues?.password || '',
     }));
   };
 
@@ -497,7 +496,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
                 name="port"
                 type="number"
                 className="form-input port"
-                value={form.port}
+                value={form.port || ''}
                 onChange={handleChange}
                 min="1"
                 max="65535"
@@ -510,7 +509,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
           <div className="form-row single">
             <div className="form-group">
               <label className="form-label" htmlFor="database">
-                {selectedDb === 'ORACLE' ? 'Service Name / SID' : 'Veritabanı Adı'} <span className="required">*</span>
+                {selectedDb === 'SQLITE' ? 'Dosya Yolu (Database)' : (selectedDb === 'ORACLE' ? 'Service Name / SID' : 'Veritabanı Adı')} <span className="required">*</span>
               </label>
               <div className="input-wrapper">
                 <FiDatabase className="input-icon" />
@@ -530,69 +529,76 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
           </div>
 
           <div className="form-divider">
-            <span>Kimlik Bilgileri</span>
+            <span>Bağlantı Adı</span>
           </div>
 
           <div className="form-row single">
             <div className="form-group">
-              <label className="form-label" htmlFor="connectionName">Bağlantı Adı</label>
               <input id="connectionName" name="connectionName" type="text" className="form-input"
-                value={form.connectionName} onChange={handleChange} placeholder="Örn. Üretim MySQL" disabled={isLoading} maxLength="100" />
+                value={form.connectionName} onChange={handleChange} placeholder="Örn. Üretim Veritabanı" disabled={isLoading} maxLength="100" />
             </div>
           </div>
 
-          {/* Username */}
-          <div className="form-row single">
-            <div className="form-group">
-              <label className="form-label" htmlFor="username">
-                Kullanıcı Adı <span className="required">*</span>
-              </label>
-              <div className="input-wrapper">
-                <FiUser className="input-icon" />
-                <input
-                  id="username"
-                  name="username"
-                  type="text"
-                  className="form-input"
-                  value={form.username}
-                  onChange={handleChange}
-                  placeholder="Kullanıcı adı girin"
-                  disabled={isLoading}
-                  autoComplete="off"
-                />
+          {selectedDb !== 'SQLITE' && (
+            <>
+              <div className="form-divider">
+                <span>Kimlik Bilgileri</span>
               </div>
-            </div>
-          </div>
 
-          {/* Password */}
-          <div className="form-row single">
-            <div className="form-group">
-              <label className="form-label" htmlFor="password">Şifre</label>
-              <div className="input-wrapper">
-                <FiLock className="input-icon" />
-                <input
-                  id="password"
-                  name="password"
-                  type={showPassword ? 'text' : 'password'}
-                  className="form-input"
-                  value={form.password}
-                  onChange={handleChange}
-                  placeholder="••••••••"
-                  disabled={isLoading}
-                  autoComplete="current-password"
-                />
-                <button
-                  type="button"
-                  className="password-toggle"
-                  onClick={() => setShowPassword(v => !v)}
-                  tabIndex={-1}
-                  title={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
-                >
-                  {showPassword ? <FiEyeOff /> : <FiEye />}
-                </button>
+              {/* Username */}
+              <div className="form-row single">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="username">
+                    Kullanıcı Adı <span className="required">*</span>
+                  </label>
+                  <div className="input-wrapper">
+                    <FiUser className="input-icon" />
+                    <input
+                      id="username"
+                      name="username"
+                      type="text"
+                      className="form-input"
+                      value={form.username}
+                      onChange={handleChange}
+                      placeholder="Kullanıcı adı girin"
+                      disabled={isLoading}
+                      autoComplete="off"
+                    />
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
+
+              {/* Password */}
+              <div className="form-row single">
+                <div className="form-group">
+                  <label className="form-label" htmlFor="password">Şifre</label>
+                  <div className="input-wrapper">
+                    <FiLock className="input-icon" />
+                    <input
+                      id="password"
+                      name="password"
+                      type={showPassword ? 'text' : 'password'}
+                      className="form-input"
+                      value={form.password}
+                      onChange={handleChange}
+                      placeholder="••••••••"
+                      disabled={isLoading}
+                      autoComplete="current-password"
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowPassword(v => !v)}
+                      tabIndex={-1}
+                      title={showPassword ? 'Şifreyi gizle' : 'Şifreyi göster'}
+                    >
+                      {showPassword ? <FiEyeOff /> : <FiEye />}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Başarılı bağlantı sonrası sunucu bilgisi */}
           {testStatus === 'success' && testResult && (
@@ -605,10 +611,12 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
                 <span className="info-label">Veritabanı</span>
                 <span className="info-value">{testResult.databaseName || form.database}</span>
               </div>
-              <div className="info-item">
-                <span className="info-label">Host</span>
-                <span className="info-value">{form.host}:{form.port}</span>
-              </div>
+              {selectedDb !== 'SQLITE' && (
+                <div className="info-item">
+                  <span className="info-label">Host</span>
+                  <span className="info-value">{form.host}:{form.port}</span>
+                </div>
+              )}
               <div className="info-item">
                 <span className="info-label">Yanıt Süresi</span>
                 <span className="info-value">{testResult.responseTimeMs}ms</span>
@@ -658,7 +666,11 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
             {!savedError && savedConnections.length === 0 && <p className="saved-empty">Henüz kayıtlı bağlantı yok.</p>}
             {savedConnections.map((connection) => <div className="saved-connection" key={connection.id}>
               <button type="button" className="saved-connect" onClick={() => handleSavedConnect(connection.id)} disabled={isLoading}>
-                <strong>{connection.connectionName}</strong><small>{connection.host}:{connection.port} · {connection.databaseName}</small>
+                <strong>{connection.connectionName}</strong>
+                <small>
+                  {connection.dbType !== 'SQLITE' ? `${connection.host}:${connection.port} · ` : ''}
+                  {connection.databaseName}
+                </small>
               </button>
               <button type="button" className="saved-delete" onClick={() => handleDeleteSaved(connection.id)} aria-label={`${connection.connectionName} bağlantısını sil`} title="Bağlantıyı sil"><FiTrash2 /></button>
             </div>)}
@@ -681,3 +693,8 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 };
 
 export default ConnectionPanel;
+
+
+
+
+

@@ -110,6 +110,11 @@ public class ConnectionService {
                     "jdbc:postgresql://%s:%d/%s",
                     request.getHost(), request.getPort(), request.getDatabase()
             );
+            case "MARIADB" -> String.format(
+                    "jdbc:mariadb://%s:%d/%s?useSSL=false&characterEncoding=UTF-8",
+                    request.getHost(), request.getPort(), request.getDatabase()
+            );
+            case "SQLITE" -> "jdbc:sqlite:" + request.getDatabase();
             case "MSSQL" -> String.format(
                     "jdbc:sqlserver://%s:%d;databaseName=%s;encrypt=false",
                     request.getHost(), request.getPort(), request.getDatabase()
@@ -144,3 +149,4 @@ public class ConnectionService {
         return msg;
     }
 }
+
