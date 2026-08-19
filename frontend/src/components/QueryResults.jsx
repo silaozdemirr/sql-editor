@@ -1,12 +1,76 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { FiAlertCircle, FiCheckCircle, FiDatabase, FiClock, FiInfo, FiDownload, FiPlus, FiMinus } from 'react-icons/fi';
+import { FiAlertCircle, FiCheckCircle, FiDatabase, FiClock, FiInfo, FiDownload, FiPlus, FiMinus, FiPieChart } from 'react-icons/fi';
 import { getQueryHistory, updateCell, executeQuery } from '../api/queryApi';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-quartz.css';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 
 ModuleRegistry.registerModules([AllCommunityModule]);
+
+const ChartRenderer = ({ data, columns }) => {
+  const [xAxis, setXAxis] = useState(columns[0] || '');
+  const [yAxis, setYAxis] = useState(columns[1] || columns[0] || '');
+  const [chartType, setChartType] = useState('bar'); 
+  
+  if (!data || data.length === 0) return <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Grafik çizilecek veri bulunamadı.</div>;
+
+  // Recharts needs actual numbers to calculate pie angles and bar heights
+  const parsedData = useMemo(() => {
+    return data.map(row => {
+      const newRow = { ...row };
+      for (const key in newRow) {
+        if (typeof newRow[key] === 'string' && !isNaN(Number(newRow[key])) && newRow[key] !== '') {
+          newRow[key] = Number(newRow[key]);
+        }
+      }
+      return newRow;
+    });
+  }, [data]);
+
+  const numericColumns = columns; // Allow picking any column, Recharts attempts to parse numbers anyway
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a4de6c', '#d0ed57', '#8884d8', '#8dd1e1'];
+
+  return (
+    <div style={{ padding: '20px', height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+         <select className="form-input" style={{ width: 'auto', padding: '6px 12px' }} value={chartType} onChange={e => setChartType(e.target.value)}>
+           <option value="bar">Sütun Grafiği (Bar)</option>
+           <option value="pie">Pasta Grafiği (Pie)</option>
+         </select>
+         <select className="form-input" style={{ width: 'auto', padding: '6px 12px' }} value={xAxis} onChange={e => setXAxis(e.target.value)}>
+           {columns.map(c => <option key={c} value={c}>{c} (Kategori/X)</option>)}
+         </select>
+         <select className="form-input" style={{ width: 'auto', padding: '6px 12px' }} value={yAxis} onChange={e => setYAxis(e.target.value)}>
+           {numericColumns.map(c => <option key={c} value={c}>{c} (Değer/Y)</option>)}
+         </select>
+      </div>
+      <div style={{ flex: 1, minHeight: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === 'bar' ? (
+            <BarChart data={parsedData} margin={{ top: 20, right: 30, left: 20, bottom: 50 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
+              <XAxis dataKey={xAxis} angle={-45} textAnchor="end" height={80} stroke="var(--text-muted)" />
+              <YAxis stroke="var(--text-muted)" />
+              <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-layer-2)', borderColor: 'var(--border-subtle)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+              <Legend />
+              <Bar dataKey={yAxis} fill="#3b82f6" name={yAxis} />
+            </BarChart>
+          ) : (
+            <PieChart>
+              <Pie data={parsedData} dataKey={yAxis} nameKey={xAxis} cx="50%" cy="50%" outerRadius={120} label>
+                {parsedData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
+              </Pie>
+              <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-layer-2)', borderColor: 'var(--border-subtle)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+              <Legend />
+            </PieChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+};
 
 const formatDataForGrid = (data, isEditable = false) => {
   if (!data || !data.columns || !data.rows) return { rowData: [], colDefs: [] };
@@ -195,6 +259,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
         <button type="button" onClick={() => setActiveTab('results')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'results' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'results' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'results' ? 600 : 400 }}><FiDatabase /> Sonuçlar</button>
         <button type="button" onClick={() => { setActiveTab('history'); loadHistory(); }} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'history' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'history' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'history' ? 600 : 400 }}><FiClock /> Sorgu Geçmişi</button>
         <button type="button" onClick={() => setActiveTab('explain')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'explain' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'explain' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'explain' ? 600 : 400 }}><FiInfo /> Açıklama</button>
+        <button type="button" onClick={() => setActiveTab('chart')} style={{ background: 'none', border: 'none', borderBottom: activeTab === 'chart' ? '2px solid var(--accent)' : '2px solid transparent', padding: '8px 0', color: activeTab === 'chart' ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontWeight: activeTab === 'chart' ? 600 : 400 }}><FiPieChart /> Grafik</button>
       </div>
       <div style={{ marginLeft: 'auto', paddingRight: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         {activeTab === 'results' && hasRows && (
@@ -283,6 +348,14 @@ export default function QueryResults({ result, error, explainResult, explainErro
             />
           </div>}
       </div>}
+      {activeTab === 'chart' && (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          {isRunning && <div className="results-state">Sorgu çalıştırılıyor…</div>}
+          {!isRunning && !result && <div className="results-state">Sorgu sonucu bulunamadı.</div>}
+          {!isRunning && result && hasRows && <ChartRenderer data={resultRowData} columns={resultColDefs.map(c => c.field).filter(f => f !== undefined)} />}
+          {!isRunning && result && !hasRows && <div className="results-state">Çizilecek tablo verisi yok.</div>}
+        </div>
+      )}
     </div>
   </section>;
 }

@@ -8,7 +8,7 @@ const ColumnIcon = ({ column }) => (
   column.primaryKey ? <FiKey className="schema-key" aria-label="Birincil anahtar" /> : <FiCircle className="schema-column-dot" aria-hidden="true" />
 );
 
-function SchemaItem({ item, connectionToken, icon: Icon, onOpenDDL }) {
+function SchemaItem({ item, connectionToken, icon: Icon, onOpenDDL, onOpenTableData }) {
   const [isOpen, setIsOpen] = useState(false);
   const [columns, setColumns] = useState(null);
   const [error, setError] = useState('');
@@ -22,7 +22,7 @@ function SchemaItem({ item, connectionToken, icon: Icon, onOpenDDL }) {
   };
   return <li className="schema-item">
     <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }} className="schema-item-header">
-      <button className="tree-row table-row" type="button" onClick={toggle} aria-expanded={isOpen} style={{ flex: 1, textAlign: 'left', display: 'flex', alignItems: 'center' }}>
+      <button className="tree-row table-row" type="button" onClick={toggle} onDoubleClick={() => onOpenTableData && onOpenTableData(item.name)} aria-expanded={isOpen} style={{ flex: 1, textAlign: 'left', display: 'flex', alignItems: 'center' }}>
         {isOpen ? <FiChevronDown /> : <FiChevronRight />}<Icon className="schema-table-icon" />
         <span className="tree-label">{item.name}</span>{(item.type === 'TABLE' || item.type === 'BASE TABLE') && <span className="row-count">{item.rowCount ?? 0}</span>}
       </button>
@@ -44,7 +44,7 @@ function SchemaItem({ item, connectionToken, icon: Icon, onOpenDDL }) {
   </li>;
 }
 
-function SchemaGroup({ title, items, connectionToken, icon, onOpenDDL }) {
+function SchemaGroup({ title, items, connectionToken, icon, onOpenDDL, onOpenTableData }) {
   const [isOpen, setIsOpen] = useState(true);
   const Icon = icon;
   return <li className="schema-group">
@@ -52,7 +52,7 @@ function SchemaGroup({ title, items, connectionToken, icon, onOpenDDL }) {
       {isOpen ? <FiChevronDown /> : <FiChevronRight />}<Icon className="schema-group-icon" />
       <span className="tree-label">{title}</span><span className="tree-count">{items.length}</span>
     </button>
-    {isOpen && <ul className="schema-list">{items.map((item) => <SchemaItem key={item.name} item={item} connectionToken={connectionToken} icon={title === 'Tablolar' ? FiTable : FiLayers} onOpenDDL={onOpenDDL} />)}</ul>}
+    {isOpen && <ul className="schema-list">{items.map((item) => <SchemaItem key={item.name} item={item} connectionToken={connectionToken} icon={title === 'Tablolar' ? FiTable : FiLayers} onOpenDDL={onOpenDDL} onOpenTableData={onOpenTableData} />)}</ul>}
   </li>;
 }
 
@@ -163,6 +163,15 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect, userRole 
     catch (requestError) { setError(requestError.response?.data?.message || 'Şema bilgisi alınamadı.'); }
     finally { setIsLoading(false); }
   }, [connectionInfo.connectionToken]);
+  const handleOpenTableData = (tableName) => {
+    let sql = `SELECT * FROM ${tableName} LIMIT 100;`;
+    if (connectionInfo.dbType === 'MSSQL') sql = `SELECT TOP 100 * FROM ${tableName};`;
+    else if (connectionInfo.dbType === 'ORACLE') sql = `SELECT * FROM ${tableName} FETCH FIRST 100 ROWS ONLY;`;
+    if (sqlEditorRef.current) {
+      sqlEditorRef.current.openTab(tableName, sql, true);
+    }
+  };
+
   useEffect(() => { loadSchema(); }, [loadSchema]);
   return <main className="workspace">
     <aside className="schema-explorer" aria-label="Şema gezgini">
@@ -189,9 +198,9 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect, userRole 
         {isLoading && <p className="schema-state">Şema yükleniyor </p>}
         {error && <div className="schema-state error-state"><FiAlertCircle /><span>{error}</span><button type="button" onClick={loadSchema}>Tekrar dene</button></div>}
         {schema && !isLoading && !error && <ul className="schema-list root-list">
-          <SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} icon={FiTable} onOpenDDL={handleOpenDDL} />
-          {schema?.views && schema.views.length > 0 && <SchemaGroup title="Görünümler" items={schema.views} connectionToken={connectionInfo.connectionToken} icon={FiEye} />}
-          <SavedScriptsGroup onOpenScript={(name, query) => sqlEditorRef.current?.openTab(name, query)} currentDatabase={schema?.databaseName || connectionInfo.database || 'varsayilan_db'} />
+          <SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} icon={FiTable} onOpenDDL={handleOpenDDL} onOpenTableData={handleOpenTableData} />
+          {schema?.views && schema.views.length > 0 && <SchemaGroup title="Görünümler" items={schema.views} connectionToken={connectionInfo.connectionToken} icon={FiEye} onOpenTableData={handleOpenTableData} />}
+          <SavedScriptsGroup onOpenScript={(name, query) => sqlEditorRef.current?.openTab(name, query)} currentDatabase={schema?.databaseName || connectionInfo.databaseName || connectionInfo.database || 'varsayilan_db'} />
         </ul>}
       </section>
       <footer className="explorer-footer"><span><span className="connected-indicator" /> {connectionInfo.dbType === 'POSTGRESQL' ? 'PostgreSQL' : connectionInfo.dbType === 'ORACLE' ? 'Oracle' : connectionInfo.dbType === 'MSSQL' ? 'SQL Server' : connectionInfo.dbType === 'SQLITE' ? 'SQLite' : connectionInfo.dbType === 'MARIADB' ? 'MariaDB' : 'MySQL'} bağlı</span><button className="disconnect-link" type="button" onClick={onDisconnect}><FiLogOut /> Bağlantıyı kes</button></footer>
@@ -201,8 +210,9 @@ export default function SchemaExplorer({ connectionInfo, onDisconnect, userRole 
         <SqlEditor 
           ref={sqlEditorRef}
           connectionToken={connectionInfo.connectionToken} 
-          currentDatabase={schema?.databaseName || connectionInfo.database || 'varsayilan_db'}
+          currentDatabase={schema?.databaseName || connectionInfo.databaseName || connectionInfo.database || 'varsayilan_db'}
           userRole={userRole} 
+          dbType={connectionInfo.dbType}
         />
       </Suspense>
     </section>

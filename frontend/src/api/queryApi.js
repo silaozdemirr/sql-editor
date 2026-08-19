@@ -31,3 +31,13 @@ export const updateCell = async (tableName, updatedColumn, newValue, oldRowValue
   });
   return response.data;
 };
+
+export const generateSqlWithAi = async (connectionToken, prompt, dbType, apiKey) => {
+  const response = await api.post('/ai/generate', { prompt, dbType }, {
+    headers: { 
+      'X-Connection-Token': connectionToken,
+      'X-Gemini-Api-Key': apiKey
+    }
+  });
+  return response.data;
+};

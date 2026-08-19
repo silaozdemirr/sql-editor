@@ -75,7 +75,7 @@ public class ConnectionService {
                     .success(true)
                     .connectionToken(connectionToken)
                     .serverVersion(meta.getDatabaseProductName() + " " + meta.getDatabaseProductVersion())
-                    .databaseName(conn.getCatalog())
+                    .databaseName(request.getDatabase())
                     .host(request.getHost())
                     .port(request.getPort())
                     .dbType(request.getDbType())
@@ -143,7 +143,7 @@ public class ConnectionService {
         if (msg.contains("Unknown database")) {
             return "Veritabanı bulunamadı. Veritabanı adını kontrol edin.";
         }
-        if (msg.contains("SSL")) {
+        if (msg.contains("SSL error") || msg.contains("SSLHandshakeException") || msg.contains("PKIX path building failed")) {
             return "SSL bağlantı hatası.";
         }
         return msg;

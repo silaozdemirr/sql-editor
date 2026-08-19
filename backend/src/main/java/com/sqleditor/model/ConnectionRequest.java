@@ -11,18 +11,13 @@ import jakarta.validation.constraints.NotNull;
  */
 public class ConnectionRequest {
 
-    @NotBlank(message = "Host boş olamaz")
     private String host;
 
-    @NotNull(message = "Port boş olamaz")
-    @Min(value = 1, message = "Port minimum 1 olmalıdır")
-    @Max(value = 65535, message = "Port maximum 65535 olmalıdır")
     private Integer port;
 
     @NotBlank(message = "Veritabanı adı boş olamaz")
     private String database;
 
-    @NotBlank(message = "Kullanıcı adı boş olamaz")
     private String username;
 
     private String password;
@@ -33,11 +28,11 @@ public class ConnectionRequest {
     private String connectionName;
 
     // Getters
-    public String getHost()           { return host; }
-    public Integer getPort()          { return port; }
+    public String getHost()           { return host != null ? host : ""; }
+    public Integer getPort()          { return port != null ? port : 0; }
     public String getDatabase()       { return database; }
-    public String getUsername()       { return username; }
-    public String getPassword()       { return password; }
+    public String getUsername()       { return username != null ? username : ""; }
+    public String getPassword()       { return password != null ? password : ""; }
     public String getDbType()         { return dbType; }
     public String getConnectionName() { return connectionName; }
 

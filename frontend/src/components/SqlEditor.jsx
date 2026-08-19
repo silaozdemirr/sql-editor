@@ -2,23 +2,23 @@ import React, { useCallback, useState, useEffect, useRef, forwardRef, useImperat
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, MySQL } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft } from 'react-icons/fi';
+import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft, FiCpu, FiMessageSquare } from 'react-icons/fi';
 import { format } from 'sql-formatter';
-import { executeQuery, explainQuery, manageTransaction } from '../api/queryApi';
+import { executeQuery, explainQuery, manageTransaction, generateSqlWithAi } from '../api/queryApi';
 import QueryResults from './QueryResults';
 
 const INITIAL_SQL = `-- Sorgunuzu buraya yazın\n`;
 
-const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, ref) => {
+const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbType = 'MYSQL' }, ref) => {
   const [tabs, setTabs] = useState([{
     id: 1, title: 'SQL Query 1', query: INITIAL_SQL, notice: 'Sorguyu çalıştırmak için Ctrl + Enter kullanın.', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
   }]);
 
   useImperativeHandle(ref, () => ({
-    openTab: (title, query) => {
+    openTab: (title, query, autoRun = false) => {
       const id = Date.now();
       setTabs(prev => [...prev, {
-        id, title, query, notice: '', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
+        id, title, query, notice: '', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: '', autoRunPending: autoRun
       }]);
       setActiveTabId(id);
     }
@@ -27,6 +27,13 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, re
   const [autoCommit, setAutoCommit] = useState(true);
   const [editorHeight, setEditorHeight] = useState(300);
   const [isLightMode, setIsLightMode] = useState(() => document.body.classList.contains('light-mode'));
+  
+  // AI States
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [showAiSettings, setShowAiSettings] = useState(false);
+  const [geminiApiKey, setGeminiApiKey] = useState(() => localStorage.getItem('geminiApiKey') || '');
+
   const isDragging = useRef(false);
 
   useEffect(() => {
@@ -88,6 +95,28 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, re
     }
   }, [activeTab.query, activeTabId, updateTab]);
 
+  const handleAiGenerate = async (e) => {
+    e.preventDefault();
+    if (!geminiApiKey) {
+      setShowAiSettings(true);
+      return;
+    }
+    if (!aiPrompt.trim()) return;
+
+    setAiGenerating(true);
+    try {
+      const result = await generateSqlWithAi(connectionToken, aiPrompt, dbType, geminiApiKey);
+      if (result && result.sql) {
+        updateTab(activeTabId, { query: result.sql + '\n\n', notice: 'Yapay zeka kodu oluşturdu.' });
+        setAiPrompt('');
+      }
+    } catch (err) {
+      alert(err.response?.data?.message || 'Yapay zeka isteği başarısız oldu.');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   const runQuery = useCallback(async () => {
     const executableSql = activeTab.query.replace(/^\s*--.*$/gm, '').trim();
     if (!executableSql) {
@@ -130,6 +159,14 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, re
         .catch(() => updateTab(activeTabId, { notice: 'Auto-Commit durumu değiştirilemedi.' }));
     }
   }, [autoCommit, connectionToken, activeTabId, updateTab]);
+
+  useEffect(() => {
+    const active = tabs.find(t => t.id === activeTabId);
+    if (active && active.autoRunPending && !active.isRunning) {
+      updateTab(activeTabId, { autoRunPending: false });
+      runQuery();
+    }
+  }, [tabs, activeTabId, runQuery, updateTab]);
 
   const runCommit = async () => {
     try {
@@ -188,6 +225,25 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, re
             <button className="run-query-button" type="button" onClick={runQuery} disabled={activeTab.isRunning} title="Sorguyu çalıştır (Ctrl + Enter)"><FiPlay /> {activeTab.isRunning ? 'Çalışıyor…' : 'Çalıştır'} <kbd>Ctrl ↵</kbd></button>
           </div>
         </header>
+        <div style={{ display: 'flex', padding: '8px 16px', background: 'var(--bg-layer-2)', borderBottom: '1px solid var(--border-subtle)', alignItems: 'center', gap: '8px' }}>
+          <FiCpu color="var(--accent)" />
+          <form onSubmit={handleAiGenerate} style={{ display: 'flex', flex: 1, gap: '8px' }}>
+            <input 
+              type="text" 
+              value={aiPrompt}
+              onChange={(e) => setAiPrompt(e.target.value)}
+              placeholder="A.I.'a ne yapmak istediğinizi söyleyin... (Örn: En yüksek not alan 5 öğrenciyi getir)" 
+              style={{ flex: 1, padding: '6px 12px', background: 'var(--bg-card)', border: '1px solid var(--border-muted)', borderRadius: '4px', color: 'var(--text-primary)' }}
+              disabled={aiGenerating}
+            />
+            <button type="submit" disabled={aiGenerating || !aiPrompt.trim()} style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: aiGenerating || !aiPrompt.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <FiMessageSquare /> {aiGenerating ? 'Düşünüyor...' : 'Üret'}
+            </button>
+            <button type="button" onClick={() => setShowAiSettings(true)} style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>
+              Ayarlar
+            </button>
+          </form>
+        </div>
         <div className="editor-content" onKeyDown={handleEditorKeydown}>
           <CodeMirror
             value={activeTab.query}
@@ -234,6 +290,31 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole }, re
           connectionToken={connectionToken} 
         />
       </div>
+
+      {showAiSettings && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'var(--bg-card)', padding: '24px', borderRadius: '8px', width: '400px', border: '1px solid var(--border-subtle)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+            <h3 style={{ marginTop: 0, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><FiCpu /> Yapay Zeka Ayarları</h3>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', marginBottom: '16px', lineHeight: 1.5 }}>
+              Doğal dilden SQL üretmek için ücretsiz bir <strong>Google Gemini API Anahtarı</strong> gereklidir. <a href="https://aistudio.google.com/" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>aistudio.google.com</a> adresinden ücretsiz alabilirsiniz. Bu anahtar sadece sizin tarayıcınızda (yerel) saklanır ve doğrudan Gemini'ye iletilir.
+            </p>
+            <input 
+              type="password" 
+              value={geminiApiKey}
+              onChange={e => setGeminiApiKey(e.target.value)}
+              placeholder="AIzaSy..."
+              style={{ width: '100%', padding: '8px 12px', marginBottom: '16px', border: '1px solid var(--border-muted)', background: 'var(--bg-layer-2)', color: 'var(--text-primary)', borderRadius: '4px' }}
+            />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+              <button type="button" onClick={() => setShowAiSettings(false)} style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-primary)', padding: '6px 16px', borderRadius: '4px', cursor: 'pointer' }}>İptal</button>
+              <button type="button" onClick={() => {
+                localStorage.setItem('geminiApiKey', geminiApiKey);
+                setShowAiSettings(false);
+              }} style={{ background: 'var(--accent)', border: 'none', color: 'white', padding: '6px 16px', borderRadius: '4px', cursor: 'pointer' }}>Kaydet</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 });

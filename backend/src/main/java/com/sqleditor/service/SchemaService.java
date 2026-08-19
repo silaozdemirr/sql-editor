@@ -110,8 +110,24 @@ public class SchemaService {
                         }
                     }
                 }
+            } else if (dbProductName.contains("sqlite")) {
+                String sql = "SELECT name AS TABLE_NAME, type AS TABLE_TYPE, 0 AS TABLE_ROWS FROM sqlite_master WHERE type IN ('table', 'view') AND name NOT LIKE 'sqlite_%' ORDER BY type DESC, name ASC";
+                try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                    try (ResultSet rs = ps.executeQuery()) {
+                        while (rs.next()) {
+                            String name = rs.getString("TABLE_NAME");
+                            String type = rs.getString("TABLE_TYPE");
+                            TableInfo info = new TableInfo(name, type, 0);
+                            if ("view".equalsIgnoreCase(type)) {
+                                views.add(info);
+                            } else {
+                                tables.add(info);
+                            }
+                        }
+                    }
+                }
             } else {
-                // Default / MySQL
+                // Default / MySQL / MariaDB
                 String sql = """
                     SELECT
                         t.TABLE_NAME,
@@ -276,6 +292,28 @@ public class SchemaService {
                         }
                     }
                 }
+            } else if (dbProductName.contains("sqlite")) {
+                String sql = "PRAGMA table_info('" + tableName.replace("'", "''") + "')";
+                try (PreparedStatement ps = conn.prepareStatement(sql);
+                     ResultSet rs = ps.executeQuery()) {
+                    while (rs.next()) {
+                        String name = rs.getString("name");
+                        String dataType = rs.getString("type");
+                        boolean notNull = rs.getInt("notnull") == 1;
+                        boolean pk = rs.getInt("pk") == 1;
+                        String dflt_value = rs.getString("dflt_value");
+
+                        ColumnInfo col = ColumnInfo.builder()
+                                .name(name)
+                                .dataType(dataType)
+                                .fullType(dataType)
+                                .nullable(!notNull)
+                                .primaryKey(pk)
+                                .defaultValue(dflt_value)
+                                .build();
+                        columns.add(col);
+                    }
+                }
             } else {
                 String sql = """
                     SELECT
@@ -380,27 +418,16 @@ public class SchemaService {
 
             for (String tableName : tableNames) {
                 List<ColumnInfo> columns = new ArrayList<>();
-                String sql = "SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, COLUMN_DEFAULT, EXTRA " +
-                             "FROM information_schema.COLUMNS " +
-                             "WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION";
-                try (PreparedStatement ps = conn.prepareStatement(sql)) {
-                    ps.setString(1, databaseName);
-                    ps.setString(2, tableName);
-                    try (ResultSet rs = ps.executeQuery()) {
-                        while (rs.next()) {
-                            String key = rs.getString("COLUMN_KEY");
-                            columns.add(ColumnInfo.builder()
-                                    .name(rs.getString("COLUMN_NAME"))
-                                    .dataType(rs.getString("DATA_TYPE"))
-                                    .fullType(rs.getString("COLUMN_TYPE"))
-                                    .nullable("YES".equals(rs.getString("IS_NULLABLE")))
-                                    .primaryKey("PRI".equals(key))
-                                    .foreignKey("MUL".equals(key))
-                                    .unique("UNI".equals(key))
-                                    .defaultValue(rs.getString("COLUMN_DEFAULT"))
-                                    .extra(rs.getString("EXTRA"))
-                                    .build());
-                        }
+                try (ResultSet rs = metaData.getColumns(null, null, tableName, null)) {
+                    while (rs.next()) {
+                        columns.add(ColumnInfo.builder()
+                                .name(rs.getString("COLUMN_NAME"))
+                                .dataType(rs.getString("TYPE_NAME"))
+                                .fullType(rs.getString("TYPE_NAME"))
+                                .nullable("YES".equalsIgnoreCase(rs.getString("IS_NULLABLE")))
+                                .primaryKey(false)
+                                .defaultValue(rs.getString("COLUMN_DEF"))
+                                .build());
                     }
                 }
                 erdTables.add(new ErdResponse.ErdTable(tableName, columns));
@@ -417,5 +444,42 @@ public class SchemaService {
             }
         }
         return new ErdResponse(erdTables, erdEdges);
+    }
+    public String getSchemaSummary(Connection conn, String dbType, String databaseName) {
+        StringBuilder summary = new StringBuilder();
+        try {
+            DatabaseMetaData metaData = conn.getMetaData();
+            String actualDbName = databaseName;
+            if (actualDbName == null || actualDbName.isEmpty()) actualDbName = conn.getSchema();
+            if (actualDbName == null || actualDbName.isEmpty()) actualDbName = metaData.getUserName();
+
+            String schemaPattern = null;
+            if (dbType.equalsIgnoreCase("ORACLE") && actualDbName != null) {
+                schemaPattern = actualDbName.toUpperCase();
+            }
+
+            try (ResultSet rs = metaData.getTables(null, schemaPattern, "%", new String[]{"TABLE", "VIEW"})) {
+                int tableCount = 0;
+                while (rs.next() && tableCount < 100) { // Sınır koyalım ki token limitini aşmasın
+                    String tableName = rs.getString("TABLE_NAME");
+                    summary.append("Tablo: ").append(tableName).append(" (");
+                    
+                    try (ResultSet colRs = metaData.getColumns(null, schemaPattern, tableName, "%")) {
+                        boolean first = true;
+                        while (colRs.next()) {
+                            if (!first) summary.append(", ");
+                            summary.append(colRs.getString("COLUMN_NAME")).append(" ")
+                                   .append(colRs.getString("TYPE_NAME"));
+                            first = false;
+                        }
+                    }
+                    summary.append(")\n");
+                    tableCount++;
+                }
+            }
+        } catch (SQLException e) {
+            System.err.println("Schema summary error: " + e.getMessage());
+        }
+        return summary.toString();
     }
 }

@@ -169,6 +169,9 @@ public class ConnectionSessionService {
             case "POSTGRESQL" -> "jdbc:postgresql://" + s.host() + ":" + s.port() + "/" + s.database();
             case "MSSQL" -> "jdbc:sqlserver://" + s.host() + ":" + s.port() + ";databaseName=" + s.database() + ";encrypt=false";
             case "ORACLE" -> "jdbc:oracle:thin:@//" + s.host() + ":" + s.port() + "/" + s.database();
+            case "MARIADB" -> "jdbc:mariadb://" + s.host() + ":" + s.port() + "/" + s.database() 
+                    + "?useSSL=false&characterEncoding=UTF-8";
+            case "SQLITE" -> "jdbc:sqlite:" + s.database();
             default -> throw new IllegalArgumentException("Desteklenmeyen veritabanı tipi: " + s.type());
         };
     }
