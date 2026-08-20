@@ -1,18 +1,51 @@
 import React, { useCallback, useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import CodeMirror from '@uiw/react-codemirror';
-import { sql, MySQL } from '@codemirror/lang-sql';
+import { sql, MySQL, PostgreSQL, MSSQL, SQLite, MariaSQL, PLSQL, StandardSQL } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft, FiCpu, FiMessageSquare } from 'react-icons/fi';
 import { format } from 'sql-formatter';
 import { executeQuery, explainQuery, manageTransaction, generateSqlWithAi } from '../api/queryApi';
 import QueryResults from './QueryResults';
 
-const INITIAL_SQL = `-- Sorgunuzu buraya yazın\n`;
+const INITIAL_SQL = ``;
 
-const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbType = 'MYSQL' }, ref) => {
+const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbType = 'MYSQL', tables = [] }, ref) => {
   const [tabs, setTabs] = useState([{
     id: 1, title: 'SQL Query 1', query: INITIAL_SQL, notice: 'Sorguyu çalıştırmak için Ctrl + Enter kullanın.', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
   }]);
+
+  const getDialect = useCallback(() => {
+    switch (dbType) {
+      case 'POSTGRESQL': return PostgreSQL;
+      case 'MSSQL': return MSSQL;
+      case 'SQLITE': return SQLite;
+      case 'MARIADB': return MariaSQL;
+      case 'ORACLE': return PLSQL;
+      case 'MYSQL': return MySQL;
+      default: return StandardSQL;
+    }
+  }, [dbType]);
+
+  const getFormatLanguage = useCallback(() => {
+    switch (dbType) {
+      case 'POSTGRESQL': return 'postgresql';
+      case 'MSSQL': return 'tsql';
+      case 'SQLITE': return 'sqlite';
+      case 'MARIADB': return 'mariadb';
+      case 'ORACLE': return 'plsql';
+      case 'MYSQL': return 'mysql';
+      default: return 'sql';
+    }
+  }, [dbType]);
+
+  // Compute CodeMirror schema for autocompletion
+  const sqlSchema = React.useMemo(() => {
+    const s = {};
+    tables.forEach(table => {
+      s[table] = []; // Array of columns could go here if we fetched them
+    });
+    return s;
+  }, [tables]);
 
   useImperativeHandle(ref, () => ({
     openTab: (title, query, autoRun = false) => {
@@ -88,12 +121,14 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
 
   const formatQuery = useCallback(() => {
     try {
-      const formatted = format(activeTab.query, { language: 'mysql', keywordCase: 'upper' });
+      const formatted = format(activeTab.query, { language: getFormatLanguage(), keywordCase: 'upper' });
       updateTab(activeTabId, { query: formatted, notice: 'Kod düzenlendi.' });
     } catch (err) {
       updateTab(activeTabId, { notice: 'Formatlama hatası: sözdizimi geçersiz olabilir.' });
     }
-  }, [activeTab.query, activeTabId, updateTab]);
+  }, [activeTab.query, activeTabId, updateTab, getFormatLanguage]);
+
+  const abortControllerRef = useRef(null);
 
   const handleAiGenerate = async (e) => {
     e.preventDefault();
@@ -104,38 +139,84 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
     if (!aiPrompt.trim()) return;
 
     setAiGenerating(true);
+    abortControllerRef.current = new AbortController();
+
     try {
-      const result = await generateSqlWithAi(connectionToken, aiPrompt, dbType, geminiApiKey);
+      const result = await generateSqlWithAi(connectionToken, aiPrompt, dbType, geminiApiKey, abortControllerRef.current.signal);
       if (result && result.sql) {
         updateTab(activeTabId, { query: result.sql + '\n\n', notice: 'Yapay zeka kodu oluşturdu.' });
         setAiPrompt('');
       }
     } catch (err) {
-      alert(err.response?.data?.message || 'Yapay zeka isteği başarısız oldu.');
+      if (err.name === 'CanceledError' || err.code === 'ERR_CANCELED') {
+        updateTab(activeTabId, { notice: 'Yapay zeka işlemi iptal edildi.' });
+      } else {
+        alert(err.response?.data?.message || 'Yapay zeka isteği başarısız oldu.');
+      }
     } finally {
       setAiGenerating(false);
+      abortControllerRef.current = null;
     }
   };
 
+  const cancelAiGeneration = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+  };
+
+  const editorRef = useRef(null);
+
   const runQuery = useCallback(async () => {
-    const executableSql = activeTab.query.replace(/^\s*--.*$/gm, '').trim();
+    let queryToRun = activeTab.query;
+    if (editorRef.current && editorRef.current.view) {
+      const view = editorRef.current.view;
+      const selection = view.state.selection.main;
+      if (!selection.empty) {
+        queryToRun = view.state.sliceDoc(selection.from, selection.to);
+      }
+    }
+    const executableSql = queryToRun.replace(/^\s*--.*$/gm, '').trim();
+    
     if (!executableSql) {
-      updateTab(activeTabId, { notice: 'Çalıştırmak için geçerli bir SQL sorgusu yazın.' });
+      updateTab(activeTabId, { notice: 'Çalıştırmak için geçerli bir SQL sorgusu yazın veya seçin.' });
       return;
     }
     updateTab(activeTabId, { isRunning: true, queryError: '', explainError: '' });
     try {
       const result = await executeQuery(connectionToken, executableSql);
-      updateTab(activeTabId, { queryResult: result, notice: `${result.executionTimeMs} ms içinde tamamlandı.` });
+      
+      // Backend returns 200 OK with error message starting with "Sorgu hatası:" to prevent console spam
+      if (result && result.message && result.message.startsWith("Sorgu hatası:")) {
+        let errorMsg = result.message;
+        if (errorMsg.toLowerCase().includes("you have an error in your sql syntax") && executableSql.includes(";")) {
+           errorMsg += "\n\nİPUCU: Birden fazla sorguyu aynı anda çalıştırırken hata alıyorsanız, lütfen çalıştırmak istediğiniz satırı veya bloğu fareyle seçip tek tek (Ctrl + Enter) çalıştırın.";
+        }
+        updateTab(activeTabId, { queryError: errorMsg, notice: 'Sorgu hatayla tamamlandı.' });
+      } else {
+        updateTab(activeTabId, { queryResult: result, notice: `${result.executionTimeMs} ms içinde tamamlandı.` });
+      }
+      
       try {
         const expResult = await explainQuery(connectionToken, executableSql);
-        updateTab(activeTabId, { explainResult: expResult });
+        if (expResult && expResult.columns && expResult.columns.length > 0) {
+          updateTab(activeTabId, { explainResult: expResult });
+        } else {
+          updateTab(activeTabId, { explainError: expResult?.message || 'Açıklama alınamadı.' });
+        }
       } catch (expError) {
         updateTab(activeTabId, { explainError: expError.response?.data?.message || 'Açıklama alınamadı.' });
       }
     } catch (requestError) {
-      const message = requestError.response?.data?.message || 'Sorgu çalıştırılamadı.';
-      updateTab(activeTabId, { queryError: message, notice: 'Sorgu hatayla tamamlandı.' });
+        let message = requestError.response?.data?.message || requestError.message || 'Sorgu çalıştırılamadı.';
+        if (typeof message !== 'string') {
+          try { message = JSON.stringify(message); } catch (e) { message = String(message); }
+        }
+        // If it's a MySQL multiple query error, give a helpful tip
+        if (message.toLowerCase().includes("you have an error in your sql syntax") && executableSql.includes(";")) {
+           message += "\n\nİPUCU: Birden fazla sorguyu aynı anda çalıştırırken hata alıyorsanız, lütfen sorguları fareyle seçip tek tek (Ctrl + Enter) çalıştırın veya sadece çalıştırmak istediğiniz satırı seçin.";
+        }
+        updateTab(activeTabId, { queryError: message, notice: 'Sorgu hatayla tamamlandı.' });
     } finally {
       updateTab(activeTabId, { isRunning: false });
     }
@@ -239,6 +320,11 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
             <button type="submit" disabled={aiGenerating || !aiPrompt.trim()} style={{ background: 'var(--accent)', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: aiGenerating || !aiPrompt.trim() ? 'not-allowed' : 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <FiMessageSquare /> {aiGenerating ? 'Düşünüyor...' : 'Üret'}
             </button>
+            {aiGenerating && (
+              <button type="button" onClick={cancelAiGeneration} style={{ background: '#e53e3e', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FiX /> İptal
+              </button>
+            )}
             <button type="button" onClick={() => setShowAiSettings(true)} style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}>
               Ayarlar
             </button>
@@ -246,16 +332,16 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
         </div>
         <div className="editor-content" onKeyDown={handleEditorKeydown}>
           <CodeMirror
+            ref={editorRef}
             value={activeTab.query}
-            height="100%"
             theme={isLightMode ? 'light' : oneDark}
-            extensions={[sql({ dialect: MySQL })]}
+            extensions={[sql({ dialect: getDialect(), schema: sqlSchema })]}
             onChange={(val) => updateTab(activeTabId, { query: val })}
             basicSetup={{ lineNumbers: true, highlightActiveLine: true, autocompletion: true, bracketMatching: true, foldGutter: true }}
           />
         </div>
         <footer className="editor-statusbar">
-          <span>{activeTab.notice}</span><span>MySQL · UTF-8</span>
+          <span>{activeTab.notice}</span><span>{dbType} · UTF-8</span>
         </footer>
       </section>
 

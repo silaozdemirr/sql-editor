@@ -40,7 +40,7 @@ const nodeTypes = {
   tableNode: TableNode,
 };
 
-export default function ErdViewer({ connectionToken }) {
+export default function ErdViewer({ connectionToken, database }) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
@@ -48,7 +48,7 @@ export default function ErdViewer({ connectionToken }) {
   useEffect(() => {
     const fetchErd = async () => {
       try {
-        const data = await getErd(connectionToken);
+        const data = await getErd(connectionToken, database);
         
         let x = 50;
         let y = 50;
@@ -86,7 +86,7 @@ export default function ErdViewer({ connectionToken }) {
     if (connectionToken) {
       fetchErd();
     }
-  }, [connectionToken, setNodes, setEdges]);
+  }, [connectionToken, database, setNodes, setEdges]);
 
   if (loading) return <div style={{ padding: '20px' }}>ER Diyagramı yükleniyor...</div>;
 

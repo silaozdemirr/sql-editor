@@ -133,6 +133,12 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
   // Test Connection
   const handleTest = async () => {
+    if (selectedDb !== 'SQLITE' && !form.password) {
+      setTestResult({ success: false, message: 'Lütfen şifre giriniz!' });
+      setTestStatus('error');
+      return;
+    }
+
     setIsTesting(true);
     setTestStatus('testing');
     setTestResult(null);
@@ -159,6 +165,13 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
   // Connect
   const handleConnect = async () => {
+    if (selectedDb !== 'SQLITE' && !form.password) {
+      setConnectStatus('error');
+      setTestResult({ success: false, message: 'Lütfen şifre giriniz!' });
+      setTestStatus('error');
+      return;
+    }
+
     setIsConnecting(true);
     setConnectStatus('connecting');
 

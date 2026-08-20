@@ -103,7 +103,7 @@ public class ConnectionService {
     private String buildJdbcUrl(ConnectionRequest request) {
         return switch (request.getDbType().toUpperCase()) {
             case "MYSQL" -> String.format(
-                    "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8",
+                    "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8&allowMultiQueries=true",
                     request.getHost(), request.getPort(), request.getDatabase()
             );
             case "POSTGRESQL" -> String.format(
@@ -111,7 +111,7 @@ public class ConnectionService {
                     request.getHost(), request.getPort(), request.getDatabase()
             );
             case "MARIADB" -> String.format(
-                    "jdbc:mariadb://%s:%d/%s?useSSL=false&characterEncoding=UTF-8",
+                    "jdbc:mariadb://%s:%d/%s?useSSL=false&characterEncoding=UTF-8&allowMultiQueries=true",
                     request.getHost(), request.getPort(), request.getDatabase()
             );
             case "SQLITE" -> "jdbc:sqlite:" + request.getDatabase();

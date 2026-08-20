@@ -229,7 +229,8 @@ public class QueryService {
 
     public List<java.util.Map<String, Object>> getHistory(String userId, String connectionId) {
         try {
-            return db.queryForList("SELECT query_text, execution_time_ms, status, CAST(created_at AS CHAR) as created_at FROM query_history WHERE user_id = ? AND connection_id = ? ORDER BY created_at DESC LIMIT 50", userId, connectionId);
+            // connection_id filter removed so history persists across different connection sessions
+            return db.queryForList("SELECT query_text, execution_time_ms, status, CAST(created_at AS CHAR) as created_at FROM query_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", userId);
         } catch (Exception e) {
             e.printStackTrace();
             return java.util.Collections.emptyList();

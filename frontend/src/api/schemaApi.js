@@ -1,14 +1,22 @@
 import api from './connectionApi';
 
-/** Bağlı oturumun tablo ve view listesini getirir. */
-export const getSchema = async (connectionToken) => {
-  const response = await api.get('/schema', { headers: { 'X-Connection-Token': connectionToken } });
+/** Bağlantıya ait tüm veritabanlarını getirir. */
+export const getDatabases = async (connectionToken) => {
+  const response = await api.get('/schema/databases', { headers: { 'X-Connection-Token': connectionToken } });
+  return response.data;
+};
+
+/** Bağlı oturumun belirli bir veritabanındaki tablo ve view listesini getirir. */
+export const getSchema = async (connectionToken, database = '') => {
+  const url = database ? `/schema?database=${encodeURIComponent(database)}` : '/schema';
+  const response = await api.get(url, { headers: { 'X-Connection-Token': connectionToken } });
   return response.data;
 };
 
 /** Bir tabloya ait kolonları getirir. */
-export const getTableColumns = async (connectionToken, tableName) => {
-  const response = await api.get(`/schema/${encodeURIComponent(tableName)}/columns`, {
+export const getTableColumns = async (connectionToken, tableName, database = '') => {
+  const url = `/schema/${encodeURIComponent(tableName)}/columns` + (database ? `?database=${encodeURIComponent(database)}` : '');
+  const response = await api.get(url, {
     headers: { 'X-Connection-Token': connectionToken },
   });
   return response.data;
@@ -22,8 +30,9 @@ export const getTableDDL = async (connectionToken, tableName) => {
   return response.data;
 };
 
-export const getErd = async (connectionToken) => {
-  const response = await api.get('/schema/erd', {
+export const getErd = async (connectionToken, database = '') => {
+  const url = database ? `/schema/erd?database=${encodeURIComponent(database)}` : '/schema/erd';
+  const response = await api.get(url, {
     headers: { 'X-Connection-Token': connectionToken },
   });
   return response.data;

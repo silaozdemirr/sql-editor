@@ -120,6 +120,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
   const [activeTab, setActiveTab] = useState('results');
   const [history, setHistory] = useState(null);
   const [historyError, setHistoryError] = useState('');
+  const [expandedGroups, setExpandedGroups] = useState({});
   const [isLightMode, setIsLightMode] = useState(() => document.body.classList.contains('light-mode'));
   const gridRef = useRef();
   
@@ -253,6 +254,33 @@ export default function QueryResults({ result, error, explainResult, explainErro
     catch (e) { setHistoryError(e.response?.data?.message || 'Geçmiş alınamadı.'); }
   };
   
+  const groupHistory = (historyList) => {
+    if (!historyList) return [];
+    const groups = [
+      { label: 'Bugün', items: [] },
+      { label: 'Dün', items: [] },
+      { label: 'Geçen Hafta', items: [] },
+      { label: 'Daha Eski (1 Ay Önce vb.)', items: [] }
+    ];
+    
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const yesterday = today - 86400000;
+    const lastWeek = today - 7 * 86400000;
+    
+    historyList.forEach(item => {
+      const d = new Date(item.created_at).getTime();
+      if (d >= today) groups[0].items.push(item);
+      else if (d >= yesterday) groups[1].items.push(item);
+      else if (d >= lastWeek) groups[2].items.push(item);
+      else groups[3].items.push(item);
+    });
+    
+    return groups.filter(g => g.items.length > 0);
+  };
+
+  const historyGroups = history ? groupHistory(history) : null;
+
   return <section className="query-results" aria-label="Sorgu sonuçları">
     <header className="results-header" style={{ display: 'flex', borderBottom: '1px solid var(--border-subtle)', padding: 0 }}>
       <div style={{ display: 'flex', gap: '16px', padding: '0 16px' }}>
@@ -290,7 +318,32 @@ export default function QueryResults({ result, error, explainResult, explainErro
       {activeTab === 'results' && (
         <>
           {isRunning && <div className="results-state">Sorgu çalıştırılıyor…</div>}
-          {!isRunning && error && <div className="results-state result-error"><FiAlertCircle /> {error}</div>}
+          {!isRunning && error && (
+            <div className="results-state result-error" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', height: '100%' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+                <FiAlertCircle size={20} />
+                <strong style={{ fontSize: '14px' }}>Bir hata oluştu</strong>
+              </div>
+              <div style={{ 
+                background: 'rgba(239, 68, 68, 0.1)', 
+                border: '1px solid rgba(239, 68, 68, 0.3)', 
+                borderRadius: '6px', 
+                padding: '12px 16px', 
+                width: '100%', 
+                maxWidth: '800px',
+                maxHeight: '200px', 
+                overflowY: 'auto', 
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                textAlign: 'left',
+                color: 'var(--error)',
+                fontFamily: 'var(--font-mono)',
+                fontSize: '12px'
+              }}>
+                {error}
+              </div>
+            </div>
+          )}
           {!isRunning && !error && !result && <div className="results-state">Sorgu sonucunuz burada tablo olarak görüntülenecek.</div>}
           {!isRunning && !error && result && !hasRows && <div className="results-state result-success"><FiCheckCircle /> {result.message}</div>}
           {!isRunning && !error && hasRows && <div className={`results-table-wrap ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
@@ -316,16 +369,42 @@ export default function QueryResults({ result, error, explainResult, explainErro
         <div className="results-table-wrap" style={{ padding: '16px', overflow: 'auto' }}>
           {!history && !historyError && <div className="results-state">Geçmiş yükleniyor…</div>}
           {historyError && <div className="results-state result-error"><FiAlertCircle /> {historyError}</div>}
-          {history && history.length === 0 && <div className="results-state">Sorgu geçmişi boş.</div>}
-          {history && history.length > 0 && <table className="results-table">
-            <thead><tr><th>Zaman</th><th>Süre (ms)</th><th>Durum</th><th>Sorgu</th></tr></thead>
-            <tbody>{history.map((h, i) => <tr key={i}>
-              <td style={{ minWidth: '150px' }}>{new Date(h.created_at).toLocaleString()}</td>
-              <td>{h.execution_time_ms}</td>
-              <td style={{ color: h.status === 'SUCCESS' ? '#4ade80' : '#f87171' }}>{h.status}</td>
-              <td style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{h.query_text}</td>
-            </tr>)}</tbody>
-          </table>}
+          {historyGroups && historyGroups.length === 0 && <div className="results-state">Sorgu geçmişi boş.</div>}
+          {historyGroups && historyGroups.map((group, gIndex) => {
+            const isExpanded = group.label === 'Bugün' 
+              ? expandedGroups[group.label] !== false  // Bugün için varsayılan: AÇIK
+              : expandedGroups[group.label] === true;  // Diğerleri için varsayılan: KAPALI
+
+            return (
+              <div key={gIndex} style={{ marginBottom: '24px' }}>
+                <button 
+                  type="button"
+                  onClick={() => setExpandedGroups(prev => ({ ...prev, [group.label]: !isExpanded }))}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '0 0 8px 0', 
+                    borderBottom: '1px solid var(--border-subtle)', marginBottom: '12px'
+                  }}
+                >
+                  <span style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-secondary)' }}>▶</span>
+                  <h3 style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+                    {group.label} <span style={{ fontSize: '12px', opacity: 0.7 }}>({group.items.length})</span>
+                  </h3>
+                </button>
+                {isExpanded && (
+                  <table className="results-table">
+                    <thead><tr><th>Zaman</th><th>Süre (ms)</th><th>Durum</th><th>Sorgu</th></tr></thead>
+                    <tbody>{group.items.map((h, i) => <tr key={i}>
+                      <td style={{ minWidth: '150px' }}>{new Date(h.created_at).toLocaleString()}</td>
+                      <td>{h.execution_time_ms}</td>
+                      <td style={{ color: h.status === 'SUCCESS' ? '#4ade80' : '#f87171' }}>{h.status}</td>
+                      <td style={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace' }}>{h.query_text}</td>
+                    </tr>)}</tbody>
+                  </table>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
       {activeTab === 'explain' && <div className="results-table-wrap" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>

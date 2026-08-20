@@ -36,7 +36,16 @@ public class QueryController {
             String role = auth.getAuthorities().iterator().next().getAuthority();
             return ResponseEntity.ok(queryService.execute(connection, request.getSql(), role, auth.getName(), token));
         } catch (SQLException | SecurityException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Sorgu çalıştırılamadı: " + exception.getMessage(), exception);
+            QueryResponse errResp = new QueryResponse(
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    null,
+                    false,
+                    0,
+                    "Sorgu hatası: " + exception.getMessage(),
+                    null
+            );
+            return ResponseEntity.ok(errResp);
         }
     }
 
@@ -67,7 +76,16 @@ public class QueryController {
         try (Connection connection = sessions.get(auth.getName(), token)) {
             return ResponseEntity.ok(queryService.explain(connection, request.getSql()));
         } catch (SQLException | SecurityException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Explain alınamadı: " + exception.getMessage(), exception);
+            QueryResponse errResp = new QueryResponse(
+                    java.util.Collections.emptyList(),
+                    java.util.Collections.emptyList(),
+                    null,
+                    false,
+                    0,
+                    "Açıklama alınamadı: " + exception.getMessage(),
+                    null
+            );
+            return ResponseEntity.ok(errResp);
         }
     }
 

@@ -19,6 +19,49 @@ import java.util.List;
 public class SchemaService {
 
     /**
+     * Bağlantıdaki mevcut veritabanlarını (katalogları/şemaları) listeler.
+     */
+    public List<String> getDatabases(Connection conn) throws SQLException {
+        List<String> databases = new ArrayList<>();
+        try (conn) {
+            DatabaseMetaData metaData = conn.getMetaData();
+            String dbProductName = metaData.getDatabaseProductName().toLowerCase();
+
+            if (dbProductName.contains("oracle")) {
+                // Oracle: Şemalar genellikle user'lardır
+                try (ResultSet rs = conn.createStatement().executeQuery("SELECT USERNAME FROM ALL_USERS ORDER BY USERNAME")) {
+                    while (rs.next()) {
+                        databases.add(rs.getString(1));
+                    }
+                } catch (Exception e) {
+                    try (ResultSet rs = metaData.getSchemas()) {
+                        while (rs.next()) {
+                            databases.add(rs.getString("TABLE_SCHEM"));
+                        }
+                    }
+                }
+            } else if (dbProductName.contains("postgresql")) {
+                // PostgreSQL: pg_database tablosundan çek
+                try (ResultSet rs = conn.createStatement().executeQuery("SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname")) {
+                    while (rs.next()) {
+                        databases.add(rs.getString(1));
+                    }
+                }
+            } else if (dbProductName.contains("sqlite")) {
+                databases.add("main");
+            } else {
+                // MySQL, SQL Server vb.: getCatalogs() standarttır
+                try (ResultSet rs = metaData.getCatalogs()) {
+                    while (rs.next()) {
+                        databases.add(rs.getString("TABLE_CAT"));
+                    }
+                }
+            }
+        }
+        return databases;
+    }
+
+    /**
      * Veritabanındaki tüm tabloları ve view'ları döner.
      */
     public SchemaResponse getSchema(Connection conn, String databaseName) throws SQLException {

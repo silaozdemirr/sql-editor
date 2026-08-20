@@ -42,13 +42,31 @@ public class SchemaController {
     }
 
     /**
-     * Sol paneldeki tablo ve view ağacını döner.
-     * GET /api/schema?sessionId={sessionId}
+     * Bağlantıdaki tüm veritabanlarını listeler.
+     * GET /api/schema/databases
+     */
+    @GetMapping("/databases")
+    public ResponseEntity<List<String>> getDatabases(@org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, org.springframework.security.core.Authentication auth) {
+        try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
+            return ResponseEntity.ok(schemaService.getDatabases(c));
+        } catch (SQLException | SecurityException e) {
+            throw databaseError(e);
+        }
+    }
+
+    /**
+     * Seçilen veritabanındaki (katalog) tablo ve view ağacını döner.
+     * GET /api/schema?database={database}
      */
     @GetMapping
-    public ResponseEntity<SchemaResponse> getSchema(@org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, org.springframework.security.core.Authentication auth) {
+    public ResponseEntity<SchemaResponse> getSchema(
+            @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, 
+            org.springframework.security.core.Authentication auth,
+            @RequestParam(required = false) String database) {
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
-            return ResponseEntity.ok(schemaService.getSchema(c, c.getCatalog()));
+            String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
+            if (targetDb == null) targetDb = c.getSchema();
+            return ResponseEntity.ok(schemaService.getSchema(c, targetDb));
         } catch (SQLException | SecurityException e) {
             throw databaseError(e);
         }
@@ -56,15 +74,18 @@ public class SchemaController {
 
     /**
      * Seçilen tablo veya view'ın kolonlarını döner.
-     * GET /api/schema/{tableName}/columns?sessionId={sessionId}
+     * GET /api/schema/{tableName}/columns?database={database}
      */
     @GetMapping("/{tableName}/columns")
     public ResponseEntity<List<ColumnInfo>> getColumns(
             @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token,
             org.springframework.security.core.Authentication auth,
-            @PathVariable String tableName) {
+            @PathVariable String tableName,
+            @RequestParam(required = false) String database) {
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
-            return ResponseEntity.ok(schemaService.getColumns(c, c.getCatalog(), tableName));
+            String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
+            if (targetDb == null) targetDb = c.getSchema();
+            return ResponseEntity.ok(schemaService.getColumns(c, targetDb, tableName));
         } catch (SQLException | SecurityException e) {
             throw databaseError(e);
         }
@@ -88,37 +109,56 @@ public class SchemaController {
 
     /**
      * Veritabanının tamamını .sql formatında indirir.
-     * GET /api/schema/dump
+     * GET /api/schema/dump?database={database}
      */
     @GetMapping("/dump")
     public ResponseEntity<StreamingResponseBody> dumpDatabase(
             @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token,
-            org.springframework.security.core.Authentication auth) {
+            org.springframework.security.core.Authentication auth,
+            @RequestParam(required = false) String database) {
         
         StreamingResponseBody stream = out -> {
             try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
+                String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
+                if (targetDb == null) targetDb = c.getSchema();
+                
+                // Set catalog/schema if possible before dumping
+                if (targetDb != null && !targetDb.isEmpty()) {
+                    try {
+                        if (c.getMetaData().getDatabaseProductName().toLowerCase().contains("oracle")) {
+                            c.setSchema(targetDb);
+                        } else {
+                            c.setCatalog(targetDb);
+                        }
+                    } catch (Exception ignored) {}
+                }
+                
                 dumpService.dump(c, out);
             } catch (SQLException | SecurityException e) {
                 throw new RuntimeException("Veritabanı yedeği alınamadı", e);
             }
         };
 
+        String filename = (database != null && !database.isEmpty() ? database : "database") + "_dump.sql";
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"database_dump.sql\"")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(MediaType.APPLICATION_OCTET_STREAM)
                 .body(stream);
     }
 
     /**
      * ER Diyagramı için JSON verisi döner.
-     * GET /api/schema/erd
+     * GET /api/schema/erd?database={database}
      */
     @GetMapping("/erd")
     public ResponseEntity<com.sqleditor.model.ErdResponse> getErd(
             @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token,
-            org.springframework.security.core.Authentication auth) {
+            org.springframework.security.core.Authentication auth,
+            @RequestParam(required = false) String database) {
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
-            return ResponseEntity.ok(schemaService.getErd(c, c.getCatalog()));
+            String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
+            if (targetDb == null) targetDb = c.getSchema();
+            return ResponseEntity.ok(schemaService.getErd(c, targetDb));
         } catch (SQLException | SecurityException e) {
             throw databaseError(e);
         }
