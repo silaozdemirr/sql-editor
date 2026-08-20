@@ -436,8 +436,10 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
           />
         ))}
         {connections.length === 0 && (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
-            Bağlantı bulunamadı.
+          <div style={{ padding: '30px 20px', textAlign: 'center', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '10px', alignItems: 'center' }}>
+            <FiDatabase size={32} style={{ opacity: 0.5 }} />
+            <span style={{ fontSize: '13px' }}>Henüz bir veritabanı bağlı değil.</span>
+            <span style={{ fontSize: '12px', opacity: 0.8 }}>Yukarıdaki <strong>+ Yeni Ekle</strong> butonuna tıklayarak sunucunuzu bağlayabilirsiniz.</span>
           </div>
         )}
       </section>
@@ -508,6 +510,16 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
       </div>
       <Suspense fallback={<section className="editor-loading">SQL editörü yükleniyor </section>}>
         <div style={{ display: 'flex', flex: 1, width: '100%', height: '100%', overflow: 'hidden' }}>
+          {connections.length === 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flex: 1, color: 'var(--text-muted)', gap: '16px', background: 'var(--bg-card)' }}>
+              <FiDatabase size={64} style={{ opacity: 0.2 }} />
+              <h2>SQL Editörüne Hoş Geldiniz</h2>
+              <p>Sol menüden bir bağlantı ekleyerek veya seçerek başlayın.</p>
+              <button className="btn-primary" onClick={onAddConnection} style={{ marginTop: '10px', flex: 'none', padding: '10px 24px', borderRadius: '8px' }}>
+                + Yeni Veritabanı Ekle
+              </button>
+            </div>
+          )}
           {connections.map(conn => {
             const isVisible = conn.connectionToken === activeToken || conn.connectionToken === splitToken;
             return (
