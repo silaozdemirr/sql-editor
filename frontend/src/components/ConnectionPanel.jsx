@@ -60,7 +60,7 @@ const DB_TYPES = [
     icon: <SiSqlite color="#003B57" />,
     defaultPort: null,
     dotClass: 'sqlite',
-    placeholder: { database: 'C:\\Users\\silao\\Desktop\\SQLeditör\\test.db' },
+    placeholder: { database: 'C:\\SQLeditör\\test.db' },
   },
   {
     key: 'MARIADB',
@@ -71,7 +71,105 @@ const DB_TYPES = [
     dotClass: 'mariadb',
     placeholder: { host: 'localhost', database: 'sirket_db', username: 'mariadbuser' },
   },
-
+  // --- NOSQL ---
+  {
+    key: 'MONGODB',
+    category: 'NOSQL',
+    label: 'MongoDB',
+    icon: <SiMongodb color="#47A248" />,
+    defaultPort: 27017,
+    dotClass: 'mongodb',
+  },
+  {
+    key: 'COUCHDB',
+    category: 'NOSQL',
+    label: 'CouchDB',
+    icon: <SiApachecouchdb color="#E3242B" />,
+    defaultPort: 5984,
+    dotClass: 'couchdb',
+    
+    
+  },
+  {
+    key: 'REDIS',
+    category: 'NOSQL',
+    label: 'Redis',
+    icon: <SiRedis color="#DC382D" />,
+    defaultPort: 6379,
+    dotClass: 'redis',
+  },
+  {
+    key: 'MEMCACHED',
+    category: 'NOSQL',
+    label: 'Memcached',
+    icon: <FiDatabase color="#E1251B" />,
+    defaultPort: 11211,
+    dotClass: 'memcached',
+  },
+  {
+    key: 'DYNAMODB',
+    category: 'NOSQL',
+    label: 'DynamoDB',
+    icon: <FiDatabase color="#4053D6" />,
+    defaultPort: 8000,
+    dotClass: 'dynamodb',
+    
+    
+  },
+  {
+    key: 'CASSANDRA',
+    category: 'NOSQL',
+    label: 'Cassandra',
+    icon: <SiApachecassandra color="#1287B1" />,
+    defaultPort: 9042,
+    dotClass: 'cassandra',
+  },
+  {
+    key: 'HBASE',
+    category: 'NOSQL',
+    label: 'HBase',
+    icon: <FiDatabase color="#293042" />,
+    defaultPort: 16000,
+    dotClass: 'hbase',
+    
+    
+  },
+  {
+    key: 'SCYLLADB',
+    category: 'NOSQL',
+    label: 'ScyllaDB',
+    icon: <FiDatabase color="#69B9CE" />,
+    defaultPort: 9042,
+    dotClass: 'scylladb',
+  },
+  {
+    key: 'NEO4J',
+    category: 'NOSQL',
+    label: 'Neo4j',
+    icon: <SiNeo4J color="#4581C3" />,
+    defaultPort: 7687,
+    dotClass: 'neo4j',
+  },
+  {
+    key: 'NEPTUNE',
+    category: 'NOSQL',
+    label: 'Neptune',
+    icon: <FaAws color="#FF9900" />,
+    defaultPort: 8182,
+    dotClass: 'neptune',
+    
+    
+  },
+  {
+    key: 'ARANGODB',
+    category: 'NOSQL',
+    label: 'ArangoDB',
+    icon: <SiArangodb color="#DDE072" />,
+    defaultPort: 8529,
+    dotClass: 'arangodb',
+    
+    
+  },
 ];
 
 const ConnectionPanel = ({ onConnected, onLogout }) => {
@@ -133,7 +231,8 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
   // Test Connection
   const handleTest = async () => {
-    if (selectedDb !== 'SQLITE' && !form.password) {
+    const noPasswordNeeded = ['SQLITE', 'MEMCACHED', 'SCYLLADB', 'CASSANDRA', 'REDIS'].includes(selectedDb);
+    if (!noPasswordNeeded && !form.password) {
       setTestResult({ success: false, message: 'Lütfen şifre giriniz!' });
       setTestStatus('error');
       return;
@@ -165,7 +264,8 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
   // Connect
   const handleConnect = async () => {
-    if (selectedDb !== 'SQLITE' && !form.password) {
+    const noPasswordNeeded = ['SQLITE', 'MEMCACHED', 'SCYLLADB', 'CASSANDRA', 'REDIS'].includes(selectedDb);
+    if (!noPasswordNeeded && !form.password) {
       setConnectStatus('error');
       setTestResult({ success: false, message: 'Lütfen şifre giriniz!' });
       setTestStatus('error');
@@ -250,7 +350,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
           <div className="logo-icon">⚡</div>
           <span className="logo-title">SQLEditör</span>
         </div>
-        <p className="logo-subtitle">Kendi veritabanı yönetim aracın</p>
+
         <button className="logout-button" type="button" onClick={onLogout}>
           <FiLogOut /> Çıkış yap
         </button>
@@ -262,7 +362,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
           <div className="db-selection-screen" style={{ padding: '2.5rem', textAlign: 'center' }}>
             <h2 style={{ fontSize: '1.4rem', marginBottom: '2rem', fontWeight: 600, color: 'var(--text-primary)' }}>Hangi veritabanına bağlanmak istiyorsun?</h2>
             
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '2.5rem', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem', alignItems: 'start' }}>
               
               <div style={{ textAlign: 'left' }}>
                 <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>İlişkisel Veritabanları (RDBMS - SQL)</h3>
@@ -291,13 +391,42 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
                   ))}
                 </div>
               </div>
+              
+              {/* NoSQL Section */}
+              <div style={{ textAlign: 'left' }}>
+                <h3 style={{ fontSize: '1.1rem', marginBottom: '0.5rem', fontWeight: 600, color: 'var(--text-primary)' }}>NoSQL (Yeni Nesil - İlişkisel Olmayan)</h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '1.5rem', lineHeight: '1.4', minHeight: '40px' }}>
+                  Esnek şemalara sahiptir. Büyük veri, gerçek zamanlı web uygulamaları ve yatay ölçekleme için tasarlanmıştır.
+                </p>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
+                  {DB_TYPES.filter(db => db.category === 'NOSQL').map(db => (
+                    <button
+                      key={db.key}
+                      className={`db-selection-btn ${db.disabled ? 'disabled' : ''}`}
+                      onClick={() => handleDbChange(db)}
+                      disabled={db.disabled}
+                      title={db.disabled ? 'Yakında eklenecek' : db.label}
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        padding: '1.5rem 1rem', borderRadius: '12px', border: '1px solid color-mix(in srgb, var(--accent-dark) 35%, transparent)',
+                        background: 'var(--bg-layer-2)', cursor: db.disabled ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease', position: 'relative'
+                      }}
+                    >
+                      <span style={{ fontSize: '2.5rem', marginBottom: '0.75rem', opacity: db.disabled ? 0.5 : 1 }}>{db.icon}</span>
+                      <span style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{db.label}</span>
+                      {db.badge && <span className="tab-badge" style={{ position: 'absolute', top: '10px', right: '10px', opacity: 0.8 }}>{db.badge}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
             </div>
           </div>
         ) : (
           <>
             <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center' }}>
-              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.9rem', fontWeight: 500 }}>
+              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '1rem', fontWeight: 600, padding: '0.4rem 0.6rem', borderRadius: '4px', transition: 'all 0.2s', marginLeft: '-0.6rem' }} className="back-btn-hover">
                 &larr; Geri dön
               </button>
               <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.95rem', fontWeight: 600, color: 'var(--text-primary)' }}>

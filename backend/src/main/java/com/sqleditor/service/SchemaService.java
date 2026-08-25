@@ -10,6 +10,15 @@ import org.springframework.stereotype.Service;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoDatabase;
+import com.mongodb.client.MongoIterable;
+import org.bson.Document;
+import redis.clients.jedis.JedisPooled;
+import com.datastax.oss.driver.api.core.CqlSession;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.Session;
+import net.spy.memcached.MemcachedClient;
 
 /**
  * Veritabanı schema bilgisini çeken servis.
@@ -524,5 +533,184 @@ public class SchemaService {
             System.err.println("Schema summary error: " + e.getMessage());
         }
         return summary.toString();
+    }
+
+    public List<String> getMongoDatabases(MongoClient mongo) {
+        List<String> dbs = new ArrayList<>();
+        try {
+            MongoIterable<String> dbNames = mongo.listDatabaseNames();
+            for (String name : dbNames) {
+                dbs.add(name);
+            }
+        } catch (Exception e) {
+            dbs.add("admin");
+            dbs.add("local");
+        }
+        return dbs;
+    }
+
+    public SchemaResponse getMongoSchema(MongoClient mongo, String databaseName) {
+        if (databaseName == null || databaseName.isBlank()) {
+            databaseName = "test"; // default
+        }
+        MongoDatabase db = mongo.getDatabase(databaseName);
+        List<TableInfo> tables = new ArrayList<>();
+        try {
+            for (String collName : db.listCollectionNames()) {
+                tables.add(new TableInfo(collName, "TABLE", 0));
+            }
+        } catch (Exception e) {
+            // Ignored, maybe unauthorized
+        }
+        return SchemaResponse.builder()
+                .databaseName(databaseName)
+                .tables(tables)
+                .views(List.of())
+                .build();
+    }
+
+    public List<ColumnInfo> getMongoColumns(MongoClient mongo, String databaseName, String collectionName) {
+        MongoDatabase db = mongo.getDatabase(databaseName);
+        List<ColumnInfo> columns = new ArrayList<>();
+        try {
+            // Sample the first 10 documents to infer schema
+            List<Document> docs = new ArrayList<>();
+            db.getCollection(collectionName).find().limit(10).into(docs);
+            
+            List<String> fieldNames = new ArrayList<>();
+            for (Document doc : docs) {
+                for (String key : doc.keySet()) {
+                    if (!fieldNames.contains(key)) {
+                        fieldNames.add(key);
+                        boolean isId = "_id".equals(key);
+                        columns.add(ColumnInfo.builder()
+                            .name(key)
+                            .dataType(doc.get(key) != null ? doc.get(key).getClass().getSimpleName() : "Object")
+                            .primaryKey(isId)
+                            .build());
+                    }
+                }
+            }
+            if (columns.isEmpty()) {
+                columns.add(ColumnInfo.builder()
+                    .name("_id")
+                    .dataType("ObjectId")
+                    .primaryKey(true)
+                    .build());
+            }
+        } catch (Exception e) {
+            // Ignored
+        }
+        return columns;
+    }
+
+    public List<String> getRedisDatabases(JedisPooled redis) {
+        // Redis uses numeric databases (usually 0-15). Just return ["0"] to satisfy UI
+        return List.of("0");
+    }
+
+    public SchemaResponse getRedisSchema(JedisPooled redis, String databaseName) {
+        // We will fake a single table called "Keys" to hold redis records
+        return SchemaResponse.builder()
+                .databaseName(databaseName != null ? databaseName : "0")
+                .tables(List.of(new TableInfo("Keys", "TABLE", 0)))
+                .views(List.of())
+                .build();
+    }
+
+    public List<ColumnInfo> getRedisColumns(JedisPooled redis, String databaseName, String collectionName) {
+        return List.of(
+            ColumnInfo.builder().name("key").dataType("String").primaryKey(true).build(),
+            ColumnInfo.builder().name("type").dataType("String").build(),
+            ColumnInfo.builder().name("value").dataType("String").build()
+        );
+    }
+
+    public List<String> getCassandraDatabases(CqlSession cassandra) {
+        List<String> keyspaces = new ArrayList<>();
+        cassandra.execute("SELECT keyspace_name FROM system_schema.keyspaces").forEach(row -> {
+            keyspaces.add(row.getString("keyspace_name"));
+        });
+        return keyspaces;
+    }
+
+    public SchemaResponse getCassandraSchema(CqlSession cassandra, String databaseName) {
+        if (databaseName == null || databaseName.isBlank()) {
+            return SchemaResponse.builder().build();
+        }
+        List<TableInfo> tables = new ArrayList<>();
+        cassandra.execute("SELECT table_name FROM system_schema.tables WHERE keyspace_name = '" + databaseName + "'")
+                 .forEach(row -> tables.add(new TableInfo(row.getString("table_name"), "TABLE", 0)));
+        return SchemaResponse.builder()
+                .databaseName(databaseName)
+                .tables(tables)
+                .views(List.of())
+                .build();
+    }
+
+    public List<ColumnInfo> getCassandraColumns(CqlSession cassandra, String databaseName, String tableName) {
+        List<ColumnInfo> columns = new ArrayList<>();
+        cassandra.execute("SELECT column_name, type, kind FROM system_schema.columns WHERE keyspace_name = '" + databaseName + "' AND table_name = '" + tableName + "'")
+                 .forEach(row -> {
+                     boolean isPk = "partition_key".equals(row.getString("kind")) || "clustering".equals(row.getString("kind"));
+                     columns.add(ColumnInfo.builder()
+                         .name(row.getString("column_name"))
+                         .dataType(row.getString("type"))
+                         .primaryKey(isPk)
+                         .build());
+                 });
+        return columns;
+    }
+
+    public List<String> getMemcachedDatabases(MemcachedClient memcached) {
+        return List.of("0");
+    }
+
+    public SchemaResponse getMemcachedSchema(MemcachedClient memcached, String databaseName) {
+        return SchemaResponse.builder()
+                .databaseName(databaseName != null ? databaseName : "0")
+                .tables(List.of(new TableInfo("Keys", "TABLE", 0)))
+                .views(List.of())
+                .build();
+    }
+
+    public List<ColumnInfo> getMemcachedColumns(MemcachedClient memcached, String databaseName, String collectionName) {
+        return List.of(
+            ColumnInfo.builder().name("key").dataType("String").primaryKey(true).build(),
+            ColumnInfo.builder().name("value").dataType("String").build()
+        );
+    }
+
+    public List<String> getNeo4jDatabases(Driver neo4j) {
+        return List.of("neo4j");
+    }
+
+    public SchemaResponse getNeo4jSchema(Driver neo4j, String databaseName) {
+        List<TableInfo> tables = new ArrayList<>();
+        try (Session session = neo4j.session()) {
+            session.run("CALL db.labels()").list().forEach(record -> {
+                tables.add(new TableInfo(record.get(0).asString(), "NODE", 0));
+            });
+        }
+        return SchemaResponse.builder()
+                .databaseName("neo4j")
+                .tables(tables)
+                .views(List.of())
+                .build();
+    }
+
+    public List<ColumnInfo> getNeo4jColumns(Driver neo4j, String databaseName, String labelName) {
+        List<ColumnInfo> columns = new ArrayList<>();
+        try (Session session = neo4j.session()) {
+            session.run("MATCH (n:`" + labelName + "`) RETURN keys(n) LIMIT 1").list().forEach(record -> {
+                record.get(0).asList().forEach(prop -> {
+                    columns.add(ColumnInfo.builder().name(prop.toString()).dataType("Property").build());
+                });
+            });
+        }
+        if (columns.isEmpty()) {
+            columns.add(ColumnInfo.builder().name("id").dataType("Long").primaryKey(true).build());
+        }
+        return columns;
     }
 }

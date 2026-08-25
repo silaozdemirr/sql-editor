@@ -15,7 +15,6 @@ public class ConnectionRequest {
 
     private Integer port;
 
-    @NotBlank(message = "Veritabanı adı boş olamaz")
     private String database;
 
     private String username;

@@ -22,6 +22,16 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.springframework.scheduling.annotation.Scheduled;
 
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import redis.clients.jedis.JedisPooled;
+import com.datastax.oss.driver.api.core.CqlSession;
+import java.net.InetSocketAddress;
+import net.spy.memcached.MemcachedClient;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.GraphDatabase;
+import org.neo4j.driver.AuthTokens;
+
 @Service
 public class ConnectionSessionService {
     private final JdbcTemplate db;
@@ -30,6 +40,11 @@ public class ConnectionSessionService {
     private final int minutes;
     private final SecureRandom random = new SecureRandom();
     private final ConcurrentMap<String, SingleConnectionDataSource> pools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, MongoClient> mongoPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, JedisPooled> redisPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, CqlSession> cassandraPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, MemcachedClient> memcachedPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Driver> neo4jPools = new ConcurrentHashMap<>();
 
     public ConnectionSessionService(JdbcTemplate db, CredentialCipher cipher, TokenHasher hasher,
             @Value("${app.connection.session-minutes}") int minutes) {
@@ -65,6 +80,75 @@ public class ConnectionSessionService {
             throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
         SingleConnectionDataSource pool = pools.computeIfAbsent(tokenHash, ignored -> pool(rows.get(0)));
         return pool.getConnection();
+    }
+
+    public MongoClient getMongo(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3),
+                rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty())
+            throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return mongoPools.computeIfAbsent(tokenHash, ignored -> mongoClient(rows.get(0)));
+    }
+
+    public JedisPooled getRedis(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3),
+                rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty())
+            throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return redisPools.computeIfAbsent(tokenHash, ignored -> redisClient(rows.get(0)));
+    }
+
+    public CqlSession getCassandra(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3),
+                rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty())
+            throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return cassandraPools.computeIfAbsent(tokenHash, ignored -> cassandraClient(rows.get(0)));
+    }
+
+    public MemcachedClient getMemcached(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3),
+                rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty())
+            throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return memcachedPools.computeIfAbsent(tokenHash, ignored -> memcachedClient(rows.get(0)));
+    }
+
+    public Driver getNeo4j(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3),
+                rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty())
+            throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return neo4jPools.computeIfAbsent(tokenHash, ignored -> neo4jClient(rows.get(0)));
+    }
+
+    public String getDbType(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<String> types = db.query("select db_type from connection_sessions where user_id=? and token_hash=?",
+                (rs, rowNum) -> rs.getString(1), userId, tokenHash);
+        if (types.isEmpty())
+            throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return types.get(0);
     }
 
     public void close(String userId, String token) {
@@ -153,6 +237,21 @@ public class ConnectionSessionService {
         SingleConnectionDataSource pool = pools.remove(tokenHash);
         if (pool != null)
             pool.destroy();
+        MongoClient mongo = mongoPools.remove(tokenHash);
+        if (mongo != null)
+            mongo.close();
+        JedisPooled redis = redisPools.remove(tokenHash);
+        if (redis != null)
+            redis.close();
+        CqlSession cassandra = cassandraPools.remove(tokenHash);
+        if (cassandra != null)
+            cassandra.close();
+        MemcachedClient memcached = memcachedPools.remove(tokenHash);
+        if (memcached != null)
+            memcached.shutdown();
+        Driver neo4j = neo4jPools.remove(tokenHash);
+        if (neo4j != null)
+            neo4j.close();
     }
 
     private SingleConnectionDataSource pool(Stored stored) {
@@ -160,6 +259,62 @@ public class ConnectionSessionService {
         SingleConnectionDataSource ds = new SingleConnectionDataSource(url(stored), stored.username(), pass, true);
         ds.setAutoCommit(true);
         return ds;
+    }
+
+    private MongoClient mongoClient(Stored stored) {
+        String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
+        String uri = "mongodb://";
+        if (stored.username() != null && !stored.username().isBlank()) {
+            uri += stored.username() + ":" + pass + "@";
+        }
+        uri += stored.host() + ":" + stored.port() + "/";
+        if (stored.database() != null && !stored.database().isBlank()) {
+            uri += "?authSource=" + stored.database();
+        }
+        return MongoClients.create(uri);
+    }
+
+    private JedisPooled redisClient(Stored stored) {
+        String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
+        if (pass != null && !pass.isBlank()) {
+            if (stored.username() != null && !stored.username().isBlank()) {
+                return new JedisPooled(stored.host(), stored.port(), stored.username(), pass);
+            }
+            // default user
+            return new JedisPooled(stored.host(), stored.port(), null, pass);
+        }
+        return new JedisPooled(stored.host(), stored.port());
+    }
+
+    private CqlSession cassandraClient(Stored stored) {
+        String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
+        var builder = CqlSession.builder()
+                .addContactPoint(new InetSocketAddress(stored.host(), stored.port()))
+                .withLocalDatacenter("datacenter1");
+        if (stored.username() != null && !stored.username().isBlank()) {
+            builder.withAuthCredentials(stored.username(), pass != null ? pass : "");
+        }
+        if (stored.database() != null && !stored.database().isBlank()) {
+            builder.withKeyspace(stored.database());
+        }
+        return builder.build();
+    }
+
+    private MemcachedClient memcachedClient(Stored stored) {
+        try {
+            return new MemcachedClient(new InetSocketAddress(stored.host(), stored.port()));
+        } catch (Exception e) {
+            throw new RuntimeException("Memcached bağlantı hatası", e);
+        }
+    }
+
+    private Driver neo4jClient(Stored stored) {
+        String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
+        String uri = "bolt://" + stored.host() + ":" + stored.port();
+        if (stored.username() != null && !stored.username().isBlank()) {
+            return GraphDatabase.driver(uri, AuthTokens.basic(stored.username(), pass != null ? pass : ""));
+        }
+        return GraphDatabase.driver(uri, AuthTokens.none());
     }
 
     private String url(Stored s) {

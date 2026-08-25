@@ -8,10 +8,20 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import org.bson.Document;
+import com.mongodb.client.MongoClient;
+import com.mongodb.client.MongoClients;
+import redis.clients.jedis.JedisPooled;
+import com.datastax.oss.driver.api.core.CqlSession;
+import java.net.InetSocketAddress;
+import net.spy.memcached.MemcachedClient;
+import org.neo4j.driver.Driver;
+import org.neo4j.driver.GraphDatabase;
+import org.neo4j.driver.AuthTokens;
 
 /**
  * Veritabanı bağlantı servisi.
- * JDBC kullanarak gerçek bağlantı testi ve kurulumu yapar.
+ * JDBC ve NoSQL kullanarak gerçek bağlantı testi ve kurulumu yapar.
  */
 @Service
 public class ConnectionService {
@@ -22,18 +32,25 @@ public class ConnectionService {
         this.sessions = sessions;
     }
 
-    /**
-     * Bağlantıyı test eder: bağlanıp hemen kapar.
-     * "Test Connection" butonuna karşılık gelir.
-     */
     public ConnectionResponse testConnection(ConnectionRequest request) {
         long startTime = System.currentTimeMillis();
-        String jdbcUrl = buildJdbcUrl(request);
+        
+        if ("MONGODB".equalsIgnoreCase(request.getDbType())) {
+            return testMongoConnection(request, startTime);
+        } else if ("REDIS".equalsIgnoreCase(request.getDbType())) {
+            return testRedisConnection(request, startTime);
+        } else if ("CASSANDRA".equalsIgnoreCase(request.getDbType()) || "SCYLLADB".equalsIgnoreCase(request.getDbType())) {
+            return testCassandraConnection(request, startTime);
+        } else if ("MEMCACHED".equalsIgnoreCase(request.getDbType())) {
+            return testMemcachedConnection(request, startTime);
+        } else if ("NEO4J".equalsIgnoreCase(request.getDbType())) {
+            return testNeo4jConnection(request, startTime);
+        }
 
+        String jdbcUrl = buildJdbcUrl(request);
         try (Connection conn = DriverManager.getConnection(jdbcUrl, request.getUsername(), request.getPassword())) {
             DatabaseMetaData meta = conn.getMetaData();
             long elapsed = System.currentTimeMillis() - startTime;
-
             return ConnectionResponse.builder()
                     .success(true)
                     .serverVersion(meta.getDatabaseProductName() + " " + meta.getDatabaseProductVersion())
@@ -44,7 +61,6 @@ public class ConnectionService {
                     .message("Bağlantı testi başarılı!")
                     .responseTimeMs(elapsed)
                     .build();
-
         } catch (SQLException e) {
             long elapsed = System.currentTimeMillis() - startTime;
             return ConnectionResponse.builder()
@@ -55,15 +71,194 @@ public class ConnectionService {
         }
     }
 
-    /**
-     * Tam bağlantı kurar ve session ID döndürür.
-     * "Connect" butonuna karşılık gelir.
-     * (Şu an test ile aynı, ileride connection pool eklenecek)
-     */
+    private ConnectionResponse testMongoConnection(ConnectionRequest request, long startTime) {
+        String uri = buildMongoUrl(request);
+        try (MongoClient client = MongoClients.create(uri)) {
+            Document ping = new Document("ping", 1);
+            Document result = client.getDatabase("admin").runCommand(ping);
+            long elapsed = System.currentTimeMillis() - startTime;
+            
+            return ConnectionResponse.builder()
+                    .success(result.getDouble("ok") == 1.0)
+                    .serverVersion("MongoDB")
+                    .databaseName(request.getDatabase())
+                    .host(request.getHost())
+                    .port(request.getPort())
+                    .dbType(request.getDbType())
+                    .message("Bağlantı testi başarılı!")
+                    .responseTimeMs(elapsed)
+                    .build();
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(false)
+                    .message("Bağlantı hatası: " + e.getMessage())
+                    .responseTimeMs(elapsed)
+                    .build();
+        }
+    }
+
+    private ConnectionResponse testRedisConnection(ConnectionRequest request, long startTime) {
+        try {
+            JedisPooled pool;
+            if (request.getPassword() != null && !request.getPassword().isBlank()) {
+                if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                    pool = new JedisPooled(request.getHost(), request.getPort(), request.getUsername(), request.getPassword());
+                } else {
+                    pool = new JedisPooled(request.getHost(), request.getPort(), null, request.getPassword());
+                }
+            } else {
+                pool = new JedisPooled(request.getHost(), request.getPort());
+            }
+            String ping = pool.ping();
+            pool.close();
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success("PONG".equalsIgnoreCase(ping))
+                    .serverVersion("Redis")
+                    .databaseName(request.getDatabase())
+                    .host(request.getHost())
+                    .port(request.getPort())
+                    .dbType(request.getDbType())
+                    .message("Bağlantı testi başarılı!")
+                    .responseTimeMs(elapsed)
+                    .build();
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(false)
+                    .message("Bağlantı hatası: " + e.getMessage())
+                    .responseTimeMs(elapsed)
+                    .build();
+        }
+    }
+
+    private ConnectionResponse testCassandraConnection(ConnectionRequest request, long startTime) {
+        try {
+            var builder = CqlSession.builder()
+                    .addContactPoint(new InetSocketAddress(request.getHost(), request.getPort()))
+                    .withLocalDatacenter("datacenter1");
+            if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                builder.withAuthCredentials(request.getUsername(), request.getPassword() != null ? request.getPassword() : "");
+            }
+            if (request.getDatabase() != null && !request.getDatabase().isBlank()) {
+                builder.withKeyspace(request.getDatabase());
+            }
+            try (CqlSession session = builder.build()) {
+                session.execute("SELECT release_version FROM system.local");
+                long elapsed = System.currentTimeMillis() - startTime;
+                return ConnectionResponse.builder()
+                        .success(true)
+                        .serverVersion("Cassandra")
+                        .databaseName(request.getDatabase())
+                        .host(request.getHost())
+                        .port(request.getPort())
+                        .dbType(request.getDbType())
+                        .message("Bağlantı testi başarılı!")
+                        .responseTimeMs(elapsed)
+                        .build();
+            }
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(false)
+                    .message("Bağlantı hatası: " + e.getMessage())
+                    .responseTimeMs(elapsed)
+                    .build();
+        }
+    }
+
+    private ConnectionResponse testMemcachedConnection(ConnectionRequest request, long startTime) {
+        try {
+            MemcachedClient client = new MemcachedClient(new InetSocketAddress(request.getHost(), request.getPort()));
+            client.getVersions(); // just to test connection
+            client.shutdown();
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(true)
+                    .serverVersion("Memcached")
+                    .databaseName(request.getDatabase())
+                    .host(request.getHost())
+                    .port(request.getPort())
+                    .dbType(request.getDbType())
+                    .message("Bağlantı testi başarılı!")
+                    .responseTimeMs(elapsed)
+                    .build();
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(false)
+                    .message("Bağlantı hatası: " + e.getMessage())
+                    .responseTimeMs(elapsed)
+                    .build();
+        }
+    }
+
+    private ConnectionResponse testNeo4jConnection(ConnectionRequest request, long startTime) {
+        try {
+            String uri = "bolt://" + request.getHost() + ":" + request.getPort();
+            Driver driver;
+            if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                driver = GraphDatabase.driver(uri, AuthTokens.basic(request.getUsername(), request.getPassword() != null ? request.getPassword() : ""));
+            } else {
+                driver = GraphDatabase.driver(uri, AuthTokens.none());
+            }
+            driver.verifyConnectivity();
+            driver.close();
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(true)
+                    .serverVersion("Neo4j")
+                    .databaseName(request.getDatabase())
+                    .host(request.getHost())
+                    .port(request.getPort())
+                    .dbType(request.getDbType())
+                    .message("Bağlantı testi başarılı!")
+                    .responseTimeMs(elapsed)
+                    .build();
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            return ConnectionResponse.builder()
+                    .success(false)
+                    .message("Bağlantı hatası: " + e.getMessage())
+                    .responseTimeMs(elapsed)
+                    .build();
+        }
+    }
+
     public ConnectionResponse connect(String userId, ConnectionRequest request) {
         long startTime = System.currentTimeMillis();
-        String jdbcUrl = buildJdbcUrl(request);
+        
+        if ("MONGODB".equalsIgnoreCase(request.getDbType()) || "REDIS".equalsIgnoreCase(request.getDbType()) || 
+            "CASSANDRA".equalsIgnoreCase(request.getDbType()) || "SCYLLADB".equalsIgnoreCase(request.getDbType()) ||
+            "MEMCACHED".equalsIgnoreCase(request.getDbType()) || "NEO4J".equalsIgnoreCase(request.getDbType())) {
+            
+            ConnectionResponse testRes;
+            if ("MONGODB".equalsIgnoreCase(request.getDbType())) testRes = testMongoConnection(request, startTime);
+            else if ("REDIS".equalsIgnoreCase(request.getDbType())) testRes = testRedisConnection(request, startTime);
+            else if ("MEMCACHED".equalsIgnoreCase(request.getDbType())) testRes = testMemcachedConnection(request, startTime);
+            else if ("NEO4J".equalsIgnoreCase(request.getDbType())) testRes = testNeo4jConnection(request, startTime);
+            else testRes = testCassandraConnection(request, startTime);
 
+            if (!testRes.isSuccess()) {
+                return testRes;
+            }
+            String connectionToken = sessions.create(userId, request);
+            sessions.history(userId, request);
+            return ConnectionResponse.builder()
+                    .success(true)
+                    .connectionToken(connectionToken)
+                    .serverVersion(testRes.getServerVersion())
+                    .databaseName(testRes.getDatabaseName())
+                    .host(testRes.getHost())
+                    .port(testRes.getPort())
+                    .dbType(testRes.getDbType())
+                    .message("Bağlantı başarıyla kuruldu!")
+                    .responseTimeMs(testRes.getResponseTimeMs())
+                    .build();
+        }
+
+        String jdbcUrl = buildJdbcUrl(request);
         try (Connection conn = DriverManager.getConnection(jdbcUrl, request.getUsername(), request.getPassword())) {
             DatabaseMetaData meta = conn.getMetaData();
             long elapsed = System.currentTimeMillis() - startTime;
@@ -82,7 +277,6 @@ public class ConnectionService {
                     .message("Bağlantı başarıyla kuruldu!")
                     .responseTimeMs(elapsed)
                     .build();
-
         } catch (SQLException e) {
             long elapsed = System.currentTimeMillis() - startTime;
             return ConnectionResponse.builder()
@@ -95,6 +289,18 @@ public class ConnectionService {
 
     public void disconnect(String userId, String connectionToken) {
         sessions.close(userId, connectionToken);
+    }
+
+    private String buildMongoUrl(ConnectionRequest request) {
+        String uri = "mongodb://";
+        if (request.getUsername() != null && !request.getUsername().isBlank()) {
+            uri += request.getUsername() + ":" + request.getPassword() + "@";
+        }
+        uri += request.getHost() + ":" + request.getPort() + "/";
+        if (request.getDatabase() != null && !request.getDatabase().isBlank()) {
+            uri += "?authSource=" + request.getDatabase();
+        }
+        return uri;
     }
 
     /**
