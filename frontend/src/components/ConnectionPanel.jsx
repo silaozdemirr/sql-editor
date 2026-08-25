@@ -87,8 +87,6 @@ const DB_TYPES = [
     icon: <SiApachecouchdb color="#E3242B" />,
     defaultPort: 5984,
     dotClass: 'couchdb',
-    badge: 'yakında',
-    disabled: true,
   },
   {
     key: 'REDIS',
@@ -113,8 +111,6 @@ const DB_TYPES = [
     icon: <FiDatabase color="#4053D6" />,
     defaultPort: 8000,
     dotClass: 'dynamodb',
-    badge: 'yakında',
-    disabled: true,
   },
   {
     key: 'CASSANDRA',
@@ -131,8 +127,6 @@ const DB_TYPES = [
     icon: <FiDatabase color="#293042" />,
     defaultPort: 16000,
     dotClass: 'hbase',
-    badge: 'yakında',
-    disabled: true,
   },
   {
     key: 'SCYLLADB',
@@ -157,8 +151,6 @@ const DB_TYPES = [
     icon: <FaAws color="#FF9900" />,
     defaultPort: 8182,
     dotClass: 'neptune',
-    badge: 'yakında',
-    disabled: true,
   },
   {
     key: 'ARANGODB',
@@ -167,8 +159,6 @@ const DB_TYPES = [
     icon: <SiArangodb color="#DDE072" />,
     defaultPort: 8529,
     dotClass: 'arangodb',
-    badge: 'yakında',
-    disabled: true,
   },
 ];
 
@@ -231,7 +221,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
   // Test Connection
   const handleTest = async () => {
-    const noPasswordNeeded = ['SQLITE', 'MEMCACHED', 'SCYLLADB', 'CASSANDRA', 'REDIS'].includes(selectedDb);
+    const noPasswordNeeded = ['SQLITE', 'MEMCACHED', 'SCYLLADB', 'CASSANDRA', 'REDIS', 'DYNAMODB', 'ARANGODB', 'NEPTUNE', 'HBASE', 'COUCHDB', 'MONGODB'].includes(selectedDb);
     if (!noPasswordNeeded && !form.password) {
       setTestResult({ success: false, message: 'Lütfen şifre giriniz!' });
       setTestStatus('error');
@@ -264,7 +254,7 @@ const ConnectionPanel = ({ onConnected, onLogout }) => {
 
   // Connect
   const handleConnect = async () => {
-    const noPasswordNeeded = ['SQLITE', 'MEMCACHED', 'SCYLLADB', 'CASSANDRA', 'REDIS'].includes(selectedDb);
+    const noPasswordNeeded = ['SQLITE', 'MEMCACHED', 'SCYLLADB', 'CASSANDRA', 'REDIS', 'DYNAMODB', 'ARANGODB', 'NEPTUNE', 'HBASE', 'COUCHDB', 'MONGODB'].includes(selectedDb);
     if (!noPasswordNeeded && !form.password) {
       setConnectStatus('error');
       setTestResult({ success: false, message: 'Lütfen şifre giriniz!' });

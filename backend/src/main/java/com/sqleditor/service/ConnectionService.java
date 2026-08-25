@@ -45,6 +45,16 @@ public class ConnectionService {
             return testMemcachedConnection(request, startTime);
         } else if ("NEO4J".equalsIgnoreCase(request.getDbType())) {
             return testNeo4jConnection(request, startTime);
+        } else if ("DYNAMODB".equalsIgnoreCase(request.getDbType())) {
+            return testDynamoDbConnection(request, startTime);
+        } else if ("ARANGODB".equalsIgnoreCase(request.getDbType())) {
+            return testArangoDbConnection(request, startTime);
+        } else if ("NEPTUNE".equalsIgnoreCase(request.getDbType())) {
+            return testNeptuneConnection(request, startTime);
+        } else if ("HBASE".equalsIgnoreCase(request.getDbType())) {
+            return testHBaseConnection(request, startTime);
+        } else if ("COUCHDB".equalsIgnoreCase(request.getDbType())) {
+            return testCouchDbConnection(request, startTime);
         }
 
         String jdbcUrl = buildJdbcUrl(request);
@@ -231,13 +241,21 @@ public class ConnectionService {
         
         if ("MONGODB".equalsIgnoreCase(request.getDbType()) || "REDIS".equalsIgnoreCase(request.getDbType()) || 
             "CASSANDRA".equalsIgnoreCase(request.getDbType()) || "SCYLLADB".equalsIgnoreCase(request.getDbType()) ||
-            "MEMCACHED".equalsIgnoreCase(request.getDbType()) || "NEO4J".equalsIgnoreCase(request.getDbType())) {
+            "MEMCACHED".equalsIgnoreCase(request.getDbType()) || "NEO4J".equalsIgnoreCase(request.getDbType()) ||
+            "DYNAMODB".equalsIgnoreCase(request.getDbType()) || "ARANGODB".equalsIgnoreCase(request.getDbType()) ||
+            "NEPTUNE".equalsIgnoreCase(request.getDbType()) || "HBASE".equalsIgnoreCase(request.getDbType()) ||
+            "COUCHDB".equalsIgnoreCase(request.getDbType())) {
             
             ConnectionResponse testRes;
             if ("MONGODB".equalsIgnoreCase(request.getDbType())) testRes = testMongoConnection(request, startTime);
             else if ("REDIS".equalsIgnoreCase(request.getDbType())) testRes = testRedisConnection(request, startTime);
             else if ("MEMCACHED".equalsIgnoreCase(request.getDbType())) testRes = testMemcachedConnection(request, startTime);
             else if ("NEO4J".equalsIgnoreCase(request.getDbType())) testRes = testNeo4jConnection(request, startTime);
+            else if ("DYNAMODB".equalsIgnoreCase(request.getDbType())) testRes = testDynamoDbConnection(request, startTime);
+            else if ("ARANGODB".equalsIgnoreCase(request.getDbType())) testRes = testArangoDbConnection(request, startTime);
+            else if ("NEPTUNE".equalsIgnoreCase(request.getDbType())) testRes = testNeptuneConnection(request, startTime);
+            else if ("HBASE".equalsIgnoreCase(request.getDbType())) testRes = testHBaseConnection(request, startTime);
+            else if ("COUCHDB".equalsIgnoreCase(request.getDbType())) testRes = testCouchDbConnection(request, startTime);
             else testRes = testCassandraConnection(request, startTime);
 
             if (!testRes.isSuccess()) {
@@ -284,6 +302,102 @@ public class ConnectionService {
                     .message("Bağlantı hatası: " + getFriendlyErrorMessage(e))
                     .responseTimeMs(elapsed)
                     .build();
+        }
+    }
+
+    private ConnectionResponse testDynamoDbConnection(ConnectionRequest request, long startTime) {
+        try (var client = software.amazon.awssdk.services.dynamodb.DynamoDbClient.builder()
+            .endpointOverride(java.net.URI.create("http://" + request.getHost() + ":" + request.getPort()))
+            .region(software.amazon.awssdk.regions.Region.US_EAST_1)
+            .credentialsProvider(software.amazon.awssdk.auth.credentials.StaticCredentialsProvider.create(
+                software.amazon.awssdk.auth.credentials.AwsBasicCredentials.create(
+                    request.getUsername() != null && !request.getUsername().isBlank() ? request.getUsername() : "dummy",
+                    request.getPassword() != null && !request.getPassword().isBlank() ? request.getPassword() : "dummy"
+                )
+            )).build()) {
+            client.listTables();
+            return ConnectionResponse.builder().success(true).serverVersion("DynamoDB").dbType(request.getDbType())
+                .message("Bağlantı testi başarılı!").responseTimeMs(System.currentTimeMillis() - startTime).build();
+        } catch (Exception e) {
+            return ConnectionResponse.builder().success(false).message("Bağlantı hatası: " + e.getMessage())
+                .responseTimeMs(System.currentTimeMillis() - startTime).build();
+        }
+    }
+
+    private ConnectionResponse testArangoDbConnection(ConnectionRequest request, long startTime) {
+        var builder = new com.arangodb.ArangoDB.Builder()
+            .host(request.getHost(), request.getPort())
+            .user(request.getUsername() != null && !request.getUsername().isBlank() ? request.getUsername() : "root")
+            .password(request.getPassword() != null ? request.getPassword() : "");
+        com.arangodb.ArangoDB client = null;
+        try {
+            client = builder.build();
+            client.getVersion();
+            return ConnectionResponse.builder().success(true).serverVersion("ArangoDB").dbType(request.getDbType())
+                .message("Bağlantı testi başarılı!").responseTimeMs(System.currentTimeMillis() - startTime).build();
+        } catch (Exception e) {
+            return ConnectionResponse.builder().success(false).message("Bağlantı hatası: " + e.getMessage())
+                .responseTimeMs(System.currentTimeMillis() - startTime).build();
+        } finally {
+            if (client != null) client.shutdown();
+        }
+    }
+
+    private ConnectionResponse testNeptuneConnection(ConnectionRequest request, long startTime) {
+        org.apache.tinkerpop.gremlin.driver.Cluster cluster = null;
+        org.apache.tinkerpop.gremlin.driver.Client client = null;
+        try {
+            cluster = org.apache.tinkerpop.gremlin.driver.Cluster.build()
+                .addContactPoint(request.getHost())
+                .port(request.getPort())
+                .create();
+            client = cluster.connect();
+            client.submit("g.V().limit(1)").all().get();
+            return ConnectionResponse.builder().success(true).serverVersion("Neptune/Gremlin").dbType(request.getDbType())
+                .message("Bağlantı testi başarılı!").responseTimeMs(System.currentTimeMillis() - startTime).build();
+        } catch (Exception e) {
+            return ConnectionResponse.builder().success(false).message("Bağlantı hatası: " + e.getMessage())
+                .responseTimeMs(System.currentTimeMillis() - startTime).build();
+        } finally {
+            if (client != null) client.close();
+            if (cluster != null) cluster.close();
+        }
+    }
+
+    private ConnectionResponse testHBaseConnection(ConnectionRequest request, long startTime) {
+        try {
+            org.apache.hadoop.conf.Configuration config = org.apache.hadoop.hbase.HBaseConfiguration.create();
+            config.set("hbase.zookeeper.quorum", request.getHost());
+            config.set("hbase.zookeeper.property.clientPort", "2181"); // Default ZK port for HBase in Docker
+            try (var conn = org.apache.hadoop.hbase.client.ConnectionFactory.createConnection(config)) {
+                conn.getAdmin().listTableNames();
+                return ConnectionResponse.builder().success(true).serverVersion("HBase").dbType(request.getDbType())
+                    .message("Bağlantı testi başarılı!").responseTimeMs(System.currentTimeMillis() - startTime).build();
+            }
+        } catch (Exception e) {
+            return ConnectionResponse.builder().success(false).message("Bağlantı hatası: " + e.getMessage())
+                .responseTimeMs(System.currentTimeMillis() - startTime).build();
+        }
+    }
+
+    private ConnectionResponse testCouchDbConnection(ConnectionRequest request, long startTime) {
+        try {
+            String url = "http://" + request.getHost() + ":" + request.getPort() + "/";
+            var builder = java.net.http.HttpRequest.newBuilder().uri(java.net.URI.create(url)).GET();
+            if (request.getUsername() != null && !request.getUsername().isBlank()) {
+                String auth = request.getUsername() + ":" + request.getPassword();
+                builder.header("Authorization", "Basic " + java.util.Base64.getEncoder().encodeToString(auth.getBytes()));
+            }
+            var resp = java.net.http.HttpClient.newHttpClient().send(builder.build(), java.net.http.HttpResponse.BodyHandlers.ofString());
+            if (resp.statusCode() < 400) {
+                return ConnectionResponse.builder().success(true).serverVersion("CouchDB").dbType(request.getDbType())
+                    .message("Bağlantı testi başarılı!").responseTimeMs(System.currentTimeMillis() - startTime).build();
+            } else {
+                throw new Exception("HTTP " + resp.statusCode());
+            }
+        } catch (Exception e) {
+            return ConnectionResponse.builder().success(false).message("Bağlantı hatası: " + e.getMessage())
+                .responseTimeMs(System.currentTimeMillis() - startTime).build();
         }
     }
 

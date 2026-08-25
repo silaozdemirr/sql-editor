@@ -713,4 +713,64 @@ public class SchemaService {
         }
         return columns;
     }
+
+    public List<String> getDynamoDatabases(software.amazon.awssdk.services.dynamodb.DynamoDbClient client) {
+        return List.of("DynamoDB");
+    }
+    public SchemaResponse getDynamoSchema(software.amazon.awssdk.services.dynamodb.DynamoDbClient client, String dbName) {
+        List<TableInfo> tables = new ArrayList<>();
+        client.listTables().tableNames().forEach(name -> tables.add(new TableInfo(name, "TABLE", 0)));
+        return SchemaResponse.builder().databaseName(dbName != null ? dbName : "DynamoDB").tables(tables).build();
+    }
+    public List<ColumnInfo> getDynamoColumns(software.amazon.awssdk.services.dynamodb.DynamoDbClient client, String dbName, String tableName) {
+        return List.of(ColumnInfo.builder().name("Item").dataType("JSON").build());
+    }
+
+    public List<String> getArangoDatabases(com.arangodb.ArangoDB client) {
+        return List.of("_system");
+    }
+    public SchemaResponse getArangoSchema(com.arangodb.ArangoDB client, String dbName) {
+        List<TableInfo> tables = new ArrayList<>();
+        client.db().getCollections().forEach(col -> tables.add(new TableInfo(col.getName(), "DOCUMENT", 0)));
+        return SchemaResponse.builder().databaseName(dbName != null ? dbName : "_system").tables(tables).build();
+    }
+    public List<ColumnInfo> getArangoColumns(com.arangodb.ArangoDB client, String dbName, String tableName) {
+        return List.of(ColumnInfo.builder().name("_key").dataType("String").primaryKey(true).build(), ColumnInfo.builder().name("_id").dataType("String").build());
+    }
+
+    public List<String> getNeptuneDatabases(org.apache.tinkerpop.gremlin.driver.Client client) {
+        return List.of("NeptuneGraph");
+    }
+    public SchemaResponse getNeptuneSchema(org.apache.tinkerpop.gremlin.driver.Client client, String dbName) {
+        return SchemaResponse.builder().databaseName("NeptuneGraph").tables(List.of(new TableInfo("Vertices", "GRAPH", 0), new TableInfo("Edges", "GRAPH", 0))).build();
+    }
+    public List<ColumnInfo> getNeptuneColumns(org.apache.tinkerpop.gremlin.driver.Client client, String dbName, String tableName) {
+        return List.of(ColumnInfo.builder().name("id").dataType("String").primaryKey(true).build(), ColumnInfo.builder().name("label").dataType("String").build());
+    }
+
+    public List<String> getHBaseDatabases(org.apache.hadoop.hbase.client.Connection client) {
+        return List.of("HBase");
+    }
+    public SchemaResponse getHBaseSchema(org.apache.hadoop.hbase.client.Connection client, String dbName) {
+        List<TableInfo> tables = new ArrayList<>();
+        try {
+            for (org.apache.hadoop.hbase.TableName tn : client.getAdmin().listTableNames()) {
+                tables.add(new TableInfo(tn.getNameAsString(), "TABLE", 0));
+            }
+        } catch(Exception e) {}
+        return SchemaResponse.builder().databaseName("HBase").tables(tables).build();
+    }
+    public List<ColumnInfo> getHBaseColumns(org.apache.hadoop.hbase.client.Connection client, String dbName, String tableName) {
+        return List.of(ColumnInfo.builder().name("RowKey").dataType("Bytes").primaryKey(true).build(), ColumnInfo.builder().name("ColumnFamily").dataType("Map").build());
+    }
+
+    public List<String> getCouchDatabases(String[] clientData) {
+        return List.of("CouchDB");
+    }
+    public SchemaResponse getCouchSchema(String[] clientData, String dbName) {
+        return SchemaResponse.builder().databaseName("CouchDB").tables(List.of(new TableInfo("_all_docs", "COLLECTION", 0))).build();
+    }
+    public List<ColumnInfo> getCouchColumns(String[] clientData, String dbName, String tableName) {
+        return List.of(ColumnInfo.builder().name("_id").dataType("String").primaryKey(true).build(), ColumnInfo.builder().name("_rev").dataType("String").build());
+    }
 }

@@ -64,6 +64,16 @@ public class SchemaController {
         } else if ("NEO4J".equalsIgnoreCase(dbType)) {
             org.neo4j.driver.Driver neo4j = sessions.getNeo4j(auth.getName(), token);
             return ResponseEntity.ok(schemaService.getNeo4jDatabases(neo4j));
+        } else if ("DYNAMODB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getDynamoDatabases(sessions.getDynamoDb(auth.getName(), token)));
+        } else if ("ARANGODB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getArangoDatabases(sessions.getArangoDb(auth.getName(), token)));
+        } else if ("NEPTUNE".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getNeptuneDatabases(sessions.getNeptune(auth.getName(), token)));
+        } else if ("HBASE".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getHBaseDatabases(sessions.getHBase(auth.getName(), token)));
+        } else if ("COUCHDB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getCouchDatabases(sessions.getCouchDb(auth.getName(), token)));
         }
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             return ResponseEntity.ok(schemaService.getDatabases(c));
@@ -97,6 +107,16 @@ public class SchemaController {
         } else if ("NEO4J".equalsIgnoreCase(dbType)) {
             org.neo4j.driver.Driver neo4j = sessions.getNeo4j(auth.getName(), token);
             return ResponseEntity.ok(schemaService.getNeo4jSchema(neo4j, database));
+        } else if ("DYNAMODB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getDynamoSchema(sessions.getDynamoDb(auth.getName(), token), database));
+        } else if ("ARANGODB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getArangoSchema(sessions.getArangoDb(auth.getName(), token), database));
+        } else if ("NEPTUNE".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getNeptuneSchema(sessions.getNeptune(auth.getName(), token), database));
+        } else if ("HBASE".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getHBaseSchema(sessions.getHBase(auth.getName(), token), database));
+        } else if ("COUCHDB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getCouchSchema(sessions.getCouchDb(auth.getName(), token), database));
         }
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
@@ -130,9 +150,21 @@ public class SchemaController {
         } else if ("MEMCACHED".equalsIgnoreCase(dbType)) {
             net.spy.memcached.MemcachedClient memcached = sessions.getMemcached(auth.getName(), token);
             return ResponseEntity.ok(schemaService.getMemcachedColumns(memcached, database, tableName));
+        } else if ("REDIS".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getRedisColumns(sessions.getRedis(auth.getName(), token), database, tableName));
         } else if ("NEO4J".equalsIgnoreCase(dbType)) {
             org.neo4j.driver.Driver neo4j = sessions.getNeo4j(auth.getName(), token);
             return ResponseEntity.ok(schemaService.getNeo4jColumns(neo4j, database, tableName));
+        } else if ("DYNAMODB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getDynamoColumns(sessions.getDynamoDb(auth.getName(), token), database, tableName));
+        } else if ("ARANGODB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getArangoColumns(sessions.getArangoDb(auth.getName(), token), database, tableName));
+        } else if ("NEPTUNE".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getNeptuneColumns(sessions.getNeptune(auth.getName(), token), database, tableName));
+        } else if ("HBASE".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getHBaseColumns(sessions.getHBase(auth.getName(), token), database, tableName));
+        } else if ("COUCHDB".equalsIgnoreCase(dbType)) {
+            return ResponseEntity.ok(schemaService.getCouchColumns(sessions.getCouchDb(auth.getName(), token), database, tableName));
         }
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();

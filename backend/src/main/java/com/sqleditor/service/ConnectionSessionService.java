@@ -45,6 +45,10 @@ public class ConnectionSessionService {
     private final ConcurrentMap<String, CqlSession> cassandraPools = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, MemcachedClient> memcachedPools = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, Driver> neo4jPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, software.amazon.awssdk.services.dynamodb.DynamoDbClient> dynamoPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, com.arangodb.ArangoDB> arangoPools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, org.apache.tinkerpop.gremlin.driver.Client> neptunePools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, org.apache.hadoop.hbase.client.Connection> hbasePools = new ConcurrentHashMap<>();
 
     public ConnectionSessionService(JdbcTemplate db, CredentialCipher cipher, TokenHasher hasher,
             @Value("${app.connection.session-minutes}") int minutes) {
@@ -142,6 +146,58 @@ public class ConnectionSessionService {
         return neo4jPools.computeIfAbsent(tokenHash, ignored -> neo4jClient(rows.get(0)));
     }
 
+    public software.amazon.awssdk.services.dynamodb.DynamoDbClient getDynamoDb(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty()) throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return dynamoPools.computeIfAbsent(tokenHash, ignored -> dynamoClient(rows.get(0)));
+    }
+
+    public com.arangodb.ArangoDB getArangoDb(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty()) throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return arangoPools.computeIfAbsent(tokenHash, ignored -> arangoClient(rows.get(0)));
+    }
+
+    public org.apache.tinkerpop.gremlin.driver.Client getNeptune(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty()) throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return neptunePools.computeIfAbsent(tokenHash, ignored -> neptuneClient(rows.get(0)));
+    }
+
+    public org.apache.hadoop.hbase.client.Connection getHBase(String userId, String token) {
+        String tokenHash = hasher.hash(token);
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
+        if (rows.isEmpty()) throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        return hbasePools.computeIfAbsent(tokenHash, ignored -> hbaseClient(rows.get(0)));
+    }
+    
+    // CouchDB uses built-in HttpClient so we just build it directly and return a URL context
+    public String[] getCouchDb(String userId, String token) {
+        List<Stored> rows = db.query("""
+                select db_type,host,port,database_name,db_username,password_ciphertext,password_iv
+                from connection_sessions where user_id=? and token_hash=?
+                """, (rs, rowNum) -> new Stored(rs.getString(1), rs.getString(2), rs.getInt(3), rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, hasher.hash(token));
+        if (rows.isEmpty()) throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
+        Stored s = rows.get(0);
+        String pass = cipher.decrypt(s.ciphertext(), s.iv());
+        return new String[] { "http://" + s.host() + ":" + s.port(), s.username(), pass };
+    }
+
     public String getDbType(String userId, String token) {
         String tokenHash = hasher.hash(token);
         List<String> types = db.query("select db_type from connection_sessions where user_id=? and token_hash=?",
@@ -235,23 +291,28 @@ public class ConnectionSessionService {
 
     private void closePool(String tokenHash) {
         SingleConnectionDataSource pool = pools.remove(tokenHash);
-        if (pool != null)
-            pool.destroy();
+        if (pool != null) pool.destroy();
         MongoClient mongo = mongoPools.remove(tokenHash);
-        if (mongo != null)
-            mongo.close();
+        if (mongo != null) mongo.close();
         JedisPooled redis = redisPools.remove(tokenHash);
-        if (redis != null)
-            redis.close();
+        if (redis != null) redis.close();
         CqlSession cassandra = cassandraPools.remove(tokenHash);
-        if (cassandra != null)
-            cassandra.close();
+        if (cassandra != null) cassandra.close();
         MemcachedClient memcached = memcachedPools.remove(tokenHash);
-        if (memcached != null)
-            memcached.shutdown();
+        if (memcached != null) memcached.shutdown();
         Driver neo4j = neo4jPools.remove(tokenHash);
-        if (neo4j != null)
-            neo4j.close();
+        if (neo4j != null) neo4j.close();
+        
+        var dynamo = dynamoPools.remove(tokenHash);
+        if (dynamo != null) dynamo.close();
+        var arango = arangoPools.remove(tokenHash);
+        if (arango != null) arango.shutdown();
+        var neptune = neptunePools.remove(tokenHash);
+        if (neptune != null) neptune.close();
+        var hbase = hbasePools.remove(tokenHash);
+        if (hbase != null) {
+            try { hbase.close(); } catch (Exception ignored) {}
+        }
     }
 
     private SingleConnectionDataSource pool(Stored stored) {
@@ -315,6 +376,47 @@ public class ConnectionSessionService {
             return GraphDatabase.driver(uri, AuthTokens.basic(stored.username(), pass != null ? pass : ""));
         }
         return GraphDatabase.driver(uri, AuthTokens.none());
+    }
+
+    private software.amazon.awssdk.services.dynamodb.DynamoDbClient dynamoClient(Stored stored) {
+        String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
+        return software.amazon.awssdk.services.dynamodb.DynamoDbClient.builder()
+            .endpointOverride(java.net.URI.create("http://" + stored.host() + ":" + stored.port()))
+            .region(software.amazon.awssdk.regions.Region.US_EAST_1)
+            .credentialsProvider(software.amazon.awssdk.auth.credentials.StaticCredentialsProvider.create(
+                software.amazon.awssdk.auth.credentials.AwsBasicCredentials.create(
+                    stored.username() != null ? stored.username() : "dummy",
+                    pass != null ? pass : "dummy"
+                )
+            )).build();
+    }
+
+    private com.arangodb.ArangoDB arangoClient(Stored stored) {
+        String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
+        return new com.arangodb.ArangoDB.Builder()
+            .host(stored.host(), stored.port())
+            .user(stored.username() != null ? stored.username() : "root")
+            .password(pass != null ? pass : "")
+            .build();
+    }
+
+    private org.apache.tinkerpop.gremlin.driver.Client neptuneClient(Stored stored) {
+        org.apache.tinkerpop.gremlin.driver.Cluster cluster = org.apache.tinkerpop.gremlin.driver.Cluster.build()
+            .addContactPoint(stored.host())
+            .port(stored.port())
+            .create();
+        return cluster.connect();
+    }
+
+    private org.apache.hadoop.hbase.client.Connection hbaseClient(Stored stored) {
+        try {
+            org.apache.hadoop.conf.Configuration config = org.apache.hadoop.hbase.HBaseConfiguration.create();
+            config.set("hbase.zookeeper.quorum", stored.host());
+            config.set("hbase.zookeeper.property.clientPort", String.valueOf(stored.port()));
+            return org.apache.hadoop.hbase.client.ConnectionFactory.createConnection(config);
+        } catch (Exception e) {
+            throw new RuntimeException("HBase bağlantı hatası", e);
+        }
     }
 
     private String url(Stored s) {

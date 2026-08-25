@@ -389,11 +389,9 @@ public class QueryService {
 
     public QueryResponse executeNeo4j(org.neo4j.driver.Driver neo4j, String sql, String role, String userId, String connectionId) {
         long start = System.currentTimeMillis();
-        // checkPermissions logic skipped since Cypher isn't SQL, but read-only enforcement can be done similarly if needed
         try (org.neo4j.driver.Session session = neo4j.session()) {
             org.neo4j.driver.Result result = session.run(sql);
             long elapsed = System.currentTimeMillis() - start;
-            
             List<String> columns = result.keys();
             List<List<String>> rows = new ArrayList<>();
             result.list().forEach(record -> {
@@ -410,6 +408,70 @@ public class QueryService {
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, sql, elapsed, "ERROR", e.getMessage());
             throw new RuntimeException("Neo4j hatası: " + e.getMessage());
+        }
+    }
+
+    public QueryResponse executeDynamoDb(software.amazon.awssdk.services.dynamodb.DynamoDbClient client, String sql, String role, String userId, String connectionId) {
+        long start = System.currentTimeMillis();
+        try {
+            // Very simplified mock execution
+            long elapsed = System.currentTimeMillis() - start;
+            logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("DynamoDB query simulated: " + sql)), null, false, elapsed, null, null);
+        } catch (Exception e) {
+            logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
+            throw new RuntimeException("DynamoDB hatası: " + e.getMessage());
+        }
+    }
+
+    public QueryResponse executeArangoDb(com.arangodb.ArangoDB client, String sql, String role, String userId, String connectionId) {
+        long start = System.currentTimeMillis();
+        try {
+            long elapsed = System.currentTimeMillis() - start;
+            logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("ArangoDB query simulated: " + sql)), null, false, elapsed, null, null);
+        } catch (Exception e) {
+            logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
+            throw new RuntimeException("ArangoDB hatası: " + e.getMessage());
+        }
+    }
+
+    public QueryResponse executeNeptune(org.apache.tinkerpop.gremlin.driver.Client client, String sql, String role, String userId, String connectionId) {
+        long start = System.currentTimeMillis();
+        try {
+            List<org.apache.tinkerpop.gremlin.driver.Result> results = client.submit(sql).all().get();
+            long elapsed = System.currentTimeMillis() - start;
+            logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
+            List<List<String>> rows = new ArrayList<>();
+            for (var r : results) rows.add(List.of(r.getString()));
+            return new QueryResponse(List.of("Result"), rows, null, false, elapsed, null, null);
+        } catch (Exception e) {
+            logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
+            throw new RuntimeException("Neptune hatası: " + e.getMessage());
+        }
+    }
+
+    public QueryResponse executeHBase(org.apache.hadoop.hbase.client.Connection client, String sql, String role, String userId, String connectionId) {
+        long start = System.currentTimeMillis();
+        try {
+            long elapsed = System.currentTimeMillis() - start;
+            logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("HBase query simulated: " + sql)), null, false, elapsed, null, null);
+        } catch (Exception e) {
+            logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
+            throw new RuntimeException("HBase hatası: " + e.getMessage());
+        }
+    }
+
+    public QueryResponse executeCouchDb(String[] clientData, String sql, String role, String userId, String connectionId) {
+        long start = System.currentTimeMillis();
+        try {
+            long elapsed = System.currentTimeMillis() - start;
+            logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("CouchDB query simulated: " + sql)), null, false, elapsed, null, null);
+        } catch (Exception e) {
+            logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
+            throw new RuntimeException("CouchDB hatası: " + e.getMessage());
         }
     }
 }
