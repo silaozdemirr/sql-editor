@@ -57,7 +57,7 @@ public class QueryController {
             String role = auth.getAuthorities().iterator().next().getAuthority();
             int updated = queryService.updateCell(connection, role, req);
             return ResponseEntity.ok(java.util.Map.of("message", updated + " kayıt güncellendi."));
-        } catch (SQLException | SecurityException exception) {
+        } catch (SQLException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Düzenleme başarısız: " + exception.getMessage(), exception);
         }
     }
@@ -104,7 +104,7 @@ public class QueryController {
                 connection.setAutoCommit(false);
             }
             return ResponseEntity.ok().build();
-        } catch (SQLException | SecurityException exception) {
+        } catch (SQLException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "İşlem başarısız: " + exception.getMessage(), exception);
         }
     }

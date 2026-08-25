@@ -49,7 +49,7 @@ public class SchemaController {
     public ResponseEntity<List<String>> getDatabases(@org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token, org.springframework.security.core.Authentication auth) {
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             return ResponseEntity.ok(schemaService.getDatabases(c));
-        } catch (SQLException | SecurityException e) {
+        } catch (SQLException e) {
             throw databaseError(e);
         }
     }
@@ -67,7 +67,7 @@ public class SchemaController {
             String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
             if (targetDb == null) targetDb = c.getSchema();
             return ResponseEntity.ok(schemaService.getSchema(c, targetDb));
-        } catch (SQLException | SecurityException e) {
+        } catch (SQLException e) {
             throw databaseError(e);
         }
     }
@@ -86,7 +86,7 @@ public class SchemaController {
             String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
             if (targetDb == null) targetDb = c.getSchema();
             return ResponseEntity.ok(schemaService.getColumns(c, targetDb, tableName));
-        } catch (SQLException | SecurityException e) {
+        } catch (SQLException e) {
             throw databaseError(e);
         }
     }
@@ -102,7 +102,7 @@ public class SchemaController {
             @PathVariable String tableName) {
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
             return ResponseEntity.ok(schemaService.getDDL(c, tableName));
-        } catch (SQLException | SecurityException e) {
+        } catch (SQLException e) {
             throw databaseError(e);
         }
     }
@@ -134,7 +134,7 @@ public class SchemaController {
                 }
                 
                 dumpService.dump(c, out);
-            } catch (SQLException | SecurityException e) {
+            } catch (SQLException e) {
                 throw new RuntimeException("Veritabanı yedeği alınamadı", e);
             }
         };
@@ -159,7 +159,7 @@ public class SchemaController {
             String targetDb = (database != null && !database.isEmpty()) ? database : c.getCatalog();
             if (targetDb == null) targetDb = c.getSchema();
             return ResponseEntity.ok(schemaService.getErd(c, targetDb));
-        } catch (SQLException | SecurityException e) {
+        } catch (SQLException e) {
             throw databaseError(e);
         }
     }
