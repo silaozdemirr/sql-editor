@@ -10,7 +10,7 @@ SQLeditör/
 │   ├── docker-compose.yml    ← MySQL container
 │   └── mysql/
 │       └── init.sql          ← Okul veritabanı + 50 öğrenci verisi
-├── backend/                  ← Spring Boot (Java 17)
+├── backend/                  ← Spring Boot (Java 21)
 │   ├── pom.xml
 │   ├── mvnw.cmd              ← Maven wrapper (Maven kurmana gerek yok!)
 │   └── src/main/java/com/sqleditor/
@@ -135,7 +135,7 @@ docker compose down -v && docker compose up -d  # Sıfırdan başlat
 ```
 
 **Backend başlamıyor:**
-- Java 17+ kurulu olduğundan emin ol: `java -version`
+- Java 21+ kurulu olduğundan emin ol: `java -version`
 - Port 8080 başka program tarafından kullanılıyor olabilir
 
 **Frontend CORS hatası:**
