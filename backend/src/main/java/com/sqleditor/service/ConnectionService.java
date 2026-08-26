@@ -112,11 +112,8 @@ public class ConnectionService {
         try {
             JedisPooled pool;
             if (request.getPassword() != null && !request.getPassword().isBlank()) {
-                if (request.getUsername() != null && !request.getUsername().isBlank()) {
-                    pool = new JedisPooled(request.getHost(), request.getPort(), request.getUsername(), request.getPassword());
-                } else {
-                    pool = new JedisPooled(request.getHost(), request.getPort(), null, request.getPassword());
-                }
+                // Her zaman "default" kullan, frontend'den gelen yanl veya otomatik doldurulmu username'i yoksay.
+                pool = new JedisPooled(request.getHost(), request.getPort(), "default", request.getPassword());
             } else {
                 pool = new JedisPooled(request.getHost(), request.getPort());
             }

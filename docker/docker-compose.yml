@@ -15,11 +15,6 @@ services:
     secrets:
       - db_root_password
       - db_password
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$(cat /run/secrets/db_root_password)"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
   oracle:
@@ -31,11 +26,6 @@ services:
       - "1521:1521"
     volumes:
       - oracle_data:/opt/oracle/oradata
-    healthcheck:
-      test: ["CMD", "healthcheck.sh"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
 
   mssql:
@@ -48,11 +38,6 @@ services:
       - "1433:1433"
     volumes:
       - mssql_data:/var/opt/mssql
-    healthcheck:
-      test: ["CMD", "/opt/mssql-tools18/bin/sqlcmd", "-S", "localhost", "-U", "sa", "-P", "Mssql_Strong_Pass123!", "-C", "-Q", "SELECT 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
     restart: unless-stopped
 
   postgres:
@@ -66,11 +51,6 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
   mongodb:
@@ -142,6 +122,44 @@ services:
       - "5984:5984"
     volumes:
       - couchdb_data:/opt/couchdb/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:latest
+    container_name: sqleditor-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  cassandra:
+    image: cassandra:latest
+    container_name: sqleditor-cassandra
+    ports:
+      - "9042:9042"
+    restart: unless-stopped
+
+  memcached:
+    image: memcached:latest
+    container_name: sqleditor-memcached
+    ports:
+      - "11211:11211"
+    restart: unless-stopped
+
+  neo4j:
+    image: neo4j:latest
+    container_name: sqleditor-neo4j
+    environment:
+      - NEO4J_AUTH=none
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    restart: unless-stopped
+
+  scylladb:
+    image: scylladb/scylla:latest
+    container_name: sqleditor-scylladb
+    ports:
+      - "9012:9042"
     restart: unless-stopped
 
 volumes:

@@ -37,16 +37,33 @@ public class AiController {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Gemini API Anahtarı eksik.");
         }
 
-        try (Connection connection = sessions.get(auth.getName(), token)) {
-            // Fetch schema context
-            String schemaContext = schemaService.getSchemaSummary(connection, request.getDbType(), null);
+        try {
+            String schemaContext = "";
+            String dbType = request.getDbType();
+            
+            boolean isNoSql = "MONGODB".equalsIgnoreCase(dbType) || "REDIS".equalsIgnoreCase(dbType) || 
+                              "CASSANDRA".equalsIgnoreCase(dbType) || "SCYLLADB".equalsIgnoreCase(dbType) || 
+                              "MEMCACHED".equalsIgnoreCase(dbType) || "NEO4J".equalsIgnoreCase(dbType) ||
+                              "DYNAMODB".equalsIgnoreCase(dbType) || "ARANGODB".equalsIgnoreCase(dbType) ||
+                              "NEPTUNE".equalsIgnoreCase(dbType) || "HBASE".equalsIgnoreCase(dbType) ||
+                              "COUCHDB".equalsIgnoreCase(dbType);
+
+            if (isNoSql) {
+                schemaContext = "Bu veritabani NoSQL (" + dbType + ") tipindedir ve sabit tablolar/kolonlar icermez. Standart " + dbType + " komutlarini (ornegin Redis icin SET, GET; MongoDB icin db.collection.find vb.) dondur.";
+            } else {
+                try (Connection connection = sessions.get(auth.getName(), token)) {
+                    schemaContext = schemaService.getSchemaSummary(connection, dbType, null);
+                }
+            }
             
             // Generate SQL via Gemini
-            String sql = aiService.generateSql(request.getPrompt(), schemaContext, request.getDbType(), apiKey);
+            String sql = aiService.generateSql(request.getPrompt(), schemaContext, dbType, apiKey);
             
             return ResponseEntity.ok(new AiResponse(sql));
+        } catch (org.springframework.web.client.HttpStatusCodeException httpEx) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Google API Hatasi (" + httpEx.getStatusCode() + "): " + httpEx.getResponseBodyAsString(), httpEx);
         } catch (Exception exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Yapay zeka SQL üretemedi: " + exception.getMessage(), exception);
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Yapay zeka SQL uretemedi: " + exception.getMessage(), exception);
         }
     }
 }

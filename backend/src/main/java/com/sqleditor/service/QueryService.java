@@ -36,8 +36,25 @@ public class QueryService {
             throw new SQLException("Tablo adı tespit edilemedi. Düzenleme yapılamaz.");
         }
 
+        String fullTableName = req.getTableName();
+        String catalog = connection.getCatalog();
+        String schema = null;
+        String pureTableName = fullTableName;
+
+        if (fullTableName.contains(".")) {
+            String[] parts = fullTableName.split("\\.");
+            if (parts.length == 2) {
+                catalog = parts[0];
+                pureTableName = parts[1];
+            } else if (parts.length == 3) {
+                catalog = parts[0];
+                schema = parts[1];
+                pureTableName = parts[2];
+            }
+        }
+
         List<String> pkColumns = new ArrayList<>();
-        try (ResultSet pkRs = connection.getMetaData().getPrimaryKeys(connection.getCatalog(), null, req.getTableName())) {
+        try (ResultSet pkRs = connection.getMetaData().getPrimaryKeys(catalog, schema, pureTableName)) {
             while (pkRs.next()) {
                 pkColumns.add(pkRs.getString("COLUMN_NAME"));
             }
@@ -45,9 +62,13 @@ public class QueryService {
 
         List<String> whereCols = pkColumns.isEmpty() ? new ArrayList<>(req.getOldRowValues().keySet()) : pkColumns;
 
-        StringBuilder sql = new StringBuilder("UPDATE `")
-                .append(req.getTableName().replace("`", "``")).append("` SET `")
-                .append(req.getUpdatedColumn().replace("`", "``")).append("` = ? WHERE ");
+        StringBuilder sql = new StringBuilder("UPDATE ");
+        String[] parts = fullTableName.split("\\.");
+        for (int i = 0; i < parts.length; i++) {
+            sql.append("`").append(parts[i].replace("`", "``")).append("`");
+            if (i < parts.length - 1) sql.append(".");
+        }
+        sql.append(" SET `").append(req.getUpdatedColumn().replace("`", "``")).append("` = ? WHERE ");
 
         List<Object> params = new ArrayList<>();
         Object newValue = req.getNewValue();
@@ -111,7 +132,14 @@ public class QueryService {
                 for (int index = 1; index <= columnCount; index++) {
                     columns.add(metaData.getColumnLabel(index));
                     if (detectedTable == null || detectedTable.isEmpty()) {
-                        detectedTable = metaData.getTableName(index);
+                        String cat = metaData.getCatalogName(index);
+                        String sch = metaData.getSchemaName(index);
+                        String tab = metaData.getTableName(index);
+                        if (tab != null && !tab.isEmpty()) {
+                            if (sch != null && !sch.isEmpty()) detectedTable = sch + "." + tab;
+                            else if (cat != null && !cat.isEmpty()) detectedTable = cat + "." + tab;
+                            else detectedTable = tab;
+                        }
                     }
                 }
 
