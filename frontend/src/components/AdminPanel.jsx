@@ -21,7 +21,7 @@ export default function AdminPanel({ onClose }) {
   const handleRoleChange = async (id, role) => {
     try {
       await updateUserRole(id, role);
-      setUsers(users.map(u => u.id === id ? { ...u, role_name: role } : u));
+      setUsers(users.map(u => u.id === id ? { ...u, roleName: role } : u));
     } catch (err) {
       alert('Rol güncellenemedi: ' + (err.response?.data?.message || err.message));
     }
@@ -65,7 +65,7 @@ export default function AdminPanel({ onClose }) {
                   <td>
                     <select
                       className="form-input admin-select"
-                      value={user.role_name}
+                      value={user.roleName}
                       onChange={(e) => handleRoleChange(user.id, e.target.value)}
                     >
                       <option value="ADMIN">ADMIN</option>

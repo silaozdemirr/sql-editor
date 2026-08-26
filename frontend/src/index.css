@@ -83,12 +83,12 @@ body {
   color: var(--text-primary);
   font-family: var(--font-main);
   line-height: 1.6;
-  min-height: 100vh;
+  height: 100vh; overflow: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-#root { min-height: 100vh; }
+#root { height: 100vh; overflow: hidden; }
 
 /* =============================================
    SCROLLBAR
@@ -104,7 +104,7 @@ body {
 .app {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh; overflow: hidden;
 }
 
 /* =============================================
@@ -115,7 +115,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  height: 100vh; overflow: hidden;
   padding: 2rem;
   background:
     radial-gradient(ellipse 60% 40% at 70% 10%, rgba(59, 130, 246,0.06) 0%, transparent 60%),
@@ -621,7 +621,7 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 100vh;
+  height: 100vh; overflow: hidden;
   gap: 0.875rem;
   background: var(--bg-primary);
   animation: fadeIn 0.4s ease;
@@ -667,7 +667,7 @@ body {
 }
 
 /* Schema Explorer — Aşama 2 */
-.workspace { display: flex; height: 100vh; overflow: hidden; background: var(--bg-primary); }
+.workspace { display: flex; flex: 1; overflow: hidden; background: var(--bg-primary); }
 .schema-explorer { width: 320px; display: flex; flex-direction: column; flex-shrink: 0; background: var(--bg-secondary); border-right: 1px solid var(--border-subtle); }
 .explorer-header { min-height: 72px; padding: 1rem 1rem .9rem 1.25rem; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border-subtle); }
 .panel-eyebrow { display: block; color: var(--text-muted); font-size: .62rem; font-weight: 600; letter-spacing: .1em; }.explorer-header h1 { color: var(--text-primary); font-size: .95rem; font-weight: 600; line-height: 1.4; }
