@@ -140,3 +140,10 @@ docker compose down -v && docker compose up -d  # Sıfırdan başlat
 
 **Frontend CORS hatası:**
 - `vite.config.js` proxy yapılandırması devreye alıyor, sorun olmamalı
+
+
+## 💡 Önemli İpuçları (Tips)
+
+*   **Veritabanı (Şema) Belirtme Zorunluluğu:** MySQL ve benzeri veritabanlarında sorgu yazarken, eğer bağlandığınız anda varsayılan bir veritabanı ismi (database) belirtmediyseniz veya farklı bir veritabanındaki tabloya erişmek istiyorsanız; sorgularınızda tablo adından önce mutlaka veritabanı adını kullanmalısınız. Aksi takdirde sistem tablonun nerede olduğunu bilemez ve sizden veritabanı adını ister.
+    *   ❌ **Yanlış:** `SELECT * FROM ogrenciler;` (Eğer varsayılan db seçilmediyse)
+    *   ✅ **Doğru:** `SELECT * FROM okul_db.ogrenciler;`
