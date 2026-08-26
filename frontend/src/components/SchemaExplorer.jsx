@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState, useRef } from 'react';
-import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle, FiCode, FiDownload, FiMap, FiX, FiEye, FiPlus } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle, FiCode, FiDownload, FiMap, FiX, FiEye, FiPlus, FiUsers } from 'react-icons/fi';
 import { getSchema, getTableColumns, getTableDDL } from '../api/schemaApi';
 const SqlEditor = lazy(() => import('./SqlEditor'));
 const ErdViewer = lazy(() => import('./ErdViewer'));
@@ -374,7 +374,7 @@ function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlE
     </>
   );
 }
-export default function SchemaExplorer({ connections, activeToken, onSwitchConnection, onAddConnection, onDisconnectConnection, onDisconnectAll, userRole }) {
+export default function SchemaExplorer({ connections, activeToken, onSwitchConnection, onAddConnection, onDisconnectConnection, onDisconnectAll, userRole, onOpenAdmin }) {
   const sqlEditorRefs = useRef({});
   const [activeTables, setActiveTables] = useState([]);
   const [splitToken, setSplitToken] = useState(null);
@@ -443,9 +443,16 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
           </div>
         )}
       </section>
-      <footer className="explorer-footer">
-        <span>{connections.length} bağlantı açık</span>
-        <button className="disconnect-link" type="button" onClick={onDisconnectAll}><FiLogOut /> Hepsini Kapat</button>
+      <footer className="explorer-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{connections.length} bağlantı açık</span>
+          <button className="disconnect-link" type="button" onClick={onDisconnectAll}><FiLogOut /> Hepsini Kapat</button>
+        </div>
+        {userRole === 'ADMIN' && (
+          <button className="btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={onOpenAdmin}>
+            <FiUsers /> Admin Paneli
+          </button>
+        )}
       </footer>
     </aside>
     <section className="workspace-main" style={{ display: 'flex', flexDirection: 'column' }}>

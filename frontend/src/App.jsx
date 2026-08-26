@@ -186,11 +186,6 @@ function App() {
 
   return (
     <div className="app">
-      {userRole === 'ADMIN' && (
-        <div className="admin-bar">
-          <button className="btn-secondary" onClick={() => setShowAdminPanel(true)}>Admin Paneli</button>
-        </div>
-      )}
       <SchemaExplorer 
         connections={connections} 
         activeToken={activeToken}
@@ -202,6 +197,7 @@ function App() {
         onDisconnectConnection={handleDisconnect}
         onDisconnectAll={handleLogout}
         userRole={userRole} 
+        onOpenAdmin={() => setShowAdminPanel(true)}
       />
       {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
       
