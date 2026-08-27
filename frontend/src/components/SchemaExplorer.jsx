@@ -122,17 +122,21 @@ function SavedScriptsGroup({ onOpenScript, currentDatabase }) {
 
 
 
-function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActiveTablesLoaded, onCreateTable, onOpenMockData }) {
+function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActiveTablesLoaded, onCreateTable, onOpenMockData, refreshCounter, searchTerm }) {
   const [schema, setSchema] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [showErd, setShowErd] = useState(false);
 
+
+
   const loadSchema = useCallback(async () => {
     setIsLoading(true); setError('');
     try { 
+      console.log("Fetching schema for", dbName, "refreshCounter:", refreshCounter);
       const data = await getSchema(connectionInfo.connectionToken, dbName);
+      console.log("Fetched schema data:", data);
       setSchema(data); 
       if (isActive && onActiveTablesLoaded) {
         onActiveTablesLoaded(data?.tables?.map(t => t.name) || []);
@@ -148,6 +152,12 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
     }
   }, [isActive, isExpanded, schema, onActiveTablesLoaded]);
 
+  useEffect(() => {
+    if (isExpanded) {
+      loadSchema();
+    }
+  }, [isExpanded, refreshCounter, loadSchema]);
+
   const toggle = (e) => {
     e.stopPropagation();
     if (!isExpanded && !schema) loadSchema();
@@ -156,7 +166,7 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
 
   const handleOpenDDL = async (tableName) => {
     try {
-      const ddl = await getTableDDL(connectionInfo.connectionToken, tableName);
+      const ddl = await getTableDDL(connectionInfo.connectionToken, dbName, tableName);
       if (sqlEditorRef.current) {
         sqlEditorRef.current.openTab(`${tableName} DDL`, ddl);
       }
@@ -196,17 +206,23 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
   };
 
   const handleOpenTableData = (tableName) => {
-    // If the database isn't the default connection database, we might need to prefix the table, 
-    // but the backend uses the connection context. We assume the backend switches catalog correctly.
-    let sql = `SELECT * FROM \`${dbName}\`.\`${tableName}\` LIMIT 100;`;
-    if (connectionInfo.dbType === 'MSSQL') sql = `SELECT TOP 100 * FROM [${dbName}].[dbo].[${tableName}];`;
-    else if (connectionInfo.dbType === 'ORACLE') sql = `SELECT * FROM "${dbName}"."${tableName}" FETCH FIRST 100 ROWS ONLY;`;
-    else if (connectionInfo.dbType === 'POSTGRESQL') sql = `SELECT * FROM "${tableName}" LIMIT 100;`; // Postgres uses current schema search path normally
+    let sql = `SELECT * FROM \`${dbName}\`.\`${tableName}\` LIMIT 1000;`;
+    if (connectionInfo.dbType === 'MSSQL') sql = `SELECT TOP 1000 * FROM [${dbName}].[dbo].[${tableName}];`;
+    else if (connectionInfo.dbType === 'ORACLE') sql = `SELECT * FROM "${dbName}"."${tableName}" FETCH FIRST 1000 ROWS ONLY;`;
+    else if (connectionInfo.dbType === 'POSTGRESQL') sql = `SELECT * FROM "${tableName}" LIMIT 1000;`;
     
     if (sqlEditorRef.current) {
       sqlEditorRef.current.openTab(tableName, sql, true);
     }
   };
+
+    const dbMatches = dbName.toLowerCase().includes((searchTerm || '').toLowerCase());
+  const tableMatches = (schema?.tables || []).some(t => t.name.toLowerCase().includes((searchTerm || '').toLowerCase()));
+  const viewMatches = (schema?.views || []).some(v => v.name.toLowerCase().includes((searchTerm || '').toLowerCase()));
+
+  if (searchTerm && !dbMatches && !tableMatches && !viewMatches) {
+    return null;
+  }
 
   return (
     <>
@@ -238,8 +254,8 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
           {isLoading && <p className="schema-state" style={{ paddingLeft: '40px' }}>Yükleniyor...</p>}
           {error && <div className="schema-state error-state" style={{ paddingLeft: '40px' }}><FiAlertCircle /><span>{error}</span><button type="button" onClick={loadSchema}>Tekrar</button></div>}
           {schema && !isLoading && !error && <ul className="schema-list root-list" style={{ paddingLeft: '24px' }}>
-            <SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiTable} onOpenDDL={handleOpenDDL} onOpenTableData={handleOpenTableData} onCreateTable={onCreateTable ? () => onCreateTable(dbName) : undefined} onOpenMockData={onOpenMockData ? (table) => onOpenMockData(dbName, table) : undefined} />
-            {schema?.views && schema.views.length > 0 && <SchemaGroup title="Görünümler" items={schema.views} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiEye} onOpenTableData={handleOpenTableData} />}
+            <SchemaGroup title="Tablolar" items={(schema.tables || []).filter(t => t.name.toLowerCase().includes((searchTerm || "").toLowerCase()))} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiTable} onOpenDDL={handleOpenDDL} onOpenTableData={handleOpenTableData} onCreateTable={onCreateTable ? () => onCreateTable(dbName) : undefined} onOpenMockData={onOpenMockData ? (table) => onOpenMockData(dbName, table) : undefined} />
+            {schema?.views && schema.views.length > 0 && <SchemaGroup title="Görünümler" items={(schema.views || []).filter(t => t.name.toLowerCase().includes((searchTerm || "").toLowerCase()))} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiEye} onOpenTableData={handleOpenTableData} />}
             <SavedScriptsGroup onOpenScript={(name, query) => sqlEditorRef.current?.openTab(name, query)} currentDatabase={dbName} />
           </ul>}
         </>
@@ -266,12 +282,13 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
 
 import { getDatabases } from '../api/schemaApi';
 
-function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlEditorRef, onActiveTablesLoaded }) {
+function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlEditorRef, onActiveTablesLoaded, onCreateTable, onOpenMockData, refreshCounter, searchTerm }) {
   const [databases, setDatabases] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
   const [showErd, setShowErd] = useState(false);
+
 
   const loadDatabases = useCallback(async () => {
     setIsLoading(true); setError('');
@@ -364,8 +381,10 @@ function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlE
               isActive={isActive}
               sqlEditorRef={sqlEditorRef}
               onActiveTablesLoaded={onActiveTablesLoaded}
-              onCreateTable={setCreateTableDb}
-              onOpenMockData={(db, tbl) => setMockDataTable({ database: db, table: tbl })}
+              onCreateTable={onCreateTable}
+              onOpenMockData={onOpenMockData}
+              refreshCounter={refreshCounter}
+              searchTerm={searchTerm}
             />
           ))}
           {!isLoading && !error && databases.length === 0 && (
@@ -398,38 +417,53 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
   const [splitToken, setSplitToken] = useState(null);
   const [createTableDb, setCreateTableDb] = useState(null);
   const [mockDataTable, setMockDataTable] = useState(null);
+  const [refreshCounter, setRefreshCounter] = useState(0);
+  const [searchTerm, setSearchTerm] = useState('');
   
   const activeConnection = connections.find(c => c.connectionToken === activeToken) || connections[0];
 
   return <main className="workspace">
     <aside className="schema-explorer" aria-label="Şema gezgini">
-      <header className="explorer-header">
-        <div><span className="panel-eyebrow">VERİTABANI GEZGİNİ</span><h1>Bağlantılar</h1></div>
-        <button 
-          type="button" 
-          onClick={onAddConnection} 
-          title="Yeni Bağlantı Ekle" 
-          aria-label="Yeni Bağlantı Ekle" 
-          style={{ 
-            padding: '6px 12px', 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '6px', 
-            fontSize: '13px', 
-            fontWeight: '600',
-            background: 'linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%)', 
-            color: '#fff', 
-            borderRadius: '6px', 
-            border: 'none', 
-            cursor: 'pointer',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            transition: 'transform 0.1s, boxShadow 0.2s'
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)'; }}
-        >
-          <FiPlus size={16} /> Yeni Ekle
-        </button>
+      <header className="explorer-header" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '12px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div><span className="panel-eyebrow">VERİTABANI GEZGİNİ</span><h1 style={{ margin: 0 }}>Bağlantılar</h1></div>
+          <button 
+            type="button" 
+            onClick={onAddConnection} 
+            title="Yeni Bağlantı Ekle" 
+            aria-label="Yeni Bağlantı Ekle" 
+            style={{ 
+              padding: '6px 12px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '6px', 
+              fontSize: '13px', 
+              fontWeight: '600',
+              background: 'linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%)', 
+              color: '#fff', 
+              borderRadius: '6px', 
+              border: 'none', 
+              cursor: 'pointer',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+              transition: 'transform 0.1s, boxShadow 0.2s'
+            }}
+          >
+            <FiPlus /> Yeni Ekle
+          </button>
+        </div>
+        <div style={{ position: 'relative' }}>
+          <input
+            type="text"
+            className="form-input"
+            placeholder="Veritabanı veya tablo ara..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{ width: '100%', padding: '8px 12px', paddingLeft: '32px', borderRadius: '6px', fontSize: '13px' }}
+          />
+          <span style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }}>
+            <svg stroke="currentColor" fill="none" strokeWidth="2" viewBox="0 0 24 24" strokeLinecap="round" strokeLinejoin="round" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+          </span>
+        </div>
       </header>
       <section className="connection-tree" style={{ padding: '0 8px' }}>
         {connections.map(conn => (
@@ -453,6 +487,10 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
             }}
             userRole={userRole}
             onActiveTablesLoaded={conn.connectionToken === activeToken ? setActiveTables : undefined}
+            onCreateTable={setCreateTableDb}
+            onOpenMockData={(db, tbl) => setMockDataTable({ database: db, table: tbl })}
+            refreshCounter={refreshCounter}
+              searchTerm={searchTerm}
           />
         ))}
         {connections.length === 0 && (
@@ -469,7 +507,7 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
           <button className="disconnect-link" type="button" onClick={onDisconnectAll}><FiLogOut /> Hepsini Kapat</button>
         </div>
         {userRole === 'ADMIN' && (
-          <button className="btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={onOpenAdmin}>
+          <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={onOpenAdmin}>
             <FiUsers /> Admin Paneli
           </button>
         )}
@@ -542,7 +580,7 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
               <FiDatabase size={64} style={{ opacity: 0.2 }} />
               <h2>SQL Editörüne Hoş Geldiniz</h2>
               <p>Sol menüden bir bağlantı ekleyerek veya seçerek başlayın.</p>
-              <button className="btn-primary" onClick={onAddConnection} style={{ marginTop: '10px', flex: 'none', padding: '10px 24px', borderRadius: '8px' }}>
+              <button className="btn btn-primary" onClick={onAddConnection} style={{ marginTop: '10px', flex: 'none', padding: '10px 24px', borderRadius: '8px' }}>
                 + Yeni Veritabanı Ekle
               </button>
             </div>
@@ -575,8 +613,7 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
         </div>
       </Suspense>
     </section>
-  {createTableDb && <CreateTableModal database={createTableDb} onClose={() => setCreateTableDb(null)} onCreated={() => { setCreateTableDb(null); }} />}
+      {createTableDb && <CreateTableModal database={createTableDb} onClose={() => setCreateTableDb(null)} onCreated={() => { setCreateTableDb(null); setTimeout(() => setRefreshCounter(c => c + 1), 500); }} />}
       {mockDataTable && <MockDataModal database={mockDataTable.database} tableName={mockDataTable.table} connectionToken={activeConnection.connectionToken} onClose={() => setMockDataTable(null)} onGenerated={() => setMockDataTable(null)} />}
     </main>;
 }
-

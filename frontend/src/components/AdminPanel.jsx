@@ -74,7 +74,7 @@ export default function AdminPanel({ onClose }) {
                     </select>
                   </td>
                   <td>
-                    <button className="btn-secondary btn-sm" onClick={() => handleDelete(user.id)}>
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleDelete(user.id)}>
                       Sil
                     </button>
                   </td>

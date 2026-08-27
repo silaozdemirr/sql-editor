@@ -30,7 +30,8 @@ public class QueryService {
         this.db = db;
     }
 
-    public int updateCell(Connection connection, String role, com.sqleditor.model.QueryUpdateReq req) throws SQLException {
+    public int updateCell(Connection connection, String role, com.sqleditor.model.QueryUpdateReq req)
+            throws SQLException {
         checkReadOnly(role, "UPDATE");
         if (req.getTableName() == null || req.getTableName().isEmpty()) {
             throw new SQLException("Tablo adı tespit edilemedi. Düzenleme yapılamaz.");
@@ -66,30 +67,37 @@ public class QueryService {
         String[] parts = fullTableName.split("\\.");
         for (int i = 0; i < parts.length; i++) {
             sql.append("`").append(parts[i].replace("`", "``")).append("`");
-            if (i < parts.length - 1) sql.append(".");
+            if (i < parts.length - 1)
+                sql.append(".");
         }
         sql.append(" SET `").append(req.getUpdatedColumn().replace("`", "``")).append("` = ? WHERE ");
 
         List<Object> params = new ArrayList<>();
         Object newValue = req.getNewValue();
-        if ("true".equalsIgnoreCase(req.getNewValue())) newValue = 1;
-        else if ("false".equalsIgnoreCase(req.getNewValue())) newValue = 0;
+        if ("true".equalsIgnoreCase(req.getNewValue()))
+            newValue = 1;
+        else if ("false".equalsIgnoreCase(req.getNewValue()))
+            newValue = 0;
         params.add(newValue);
 
         boolean first = true;
         for (String colName : whereCols) {
             String strVal = req.getOldRowValues().get(colName);
-            if (!first) sql.append(" AND ");
+            if (!first)
+                sql.append(" AND ");
             sql.append("`").append(colName.replace("`", "``")).append("` ");
             if (strVal == null) {
                 sql.append("IS NULL");
             } else {
                 sql.append("= ?");
                 Object paramVal = strVal;
-                // WHERE clause için eğer Primary Key yoksa ve boolean değerler geçiyorsa hata vermemesi için
+                // WHERE clause için eğer Primary Key yoksa ve boolean değerler geçiyorsa hata
+                // vermemesi için
                 if (pkColumns.isEmpty()) {
-                    if ("true".equalsIgnoreCase(strVal)) paramVal = 1;
-                    else if ("false".equalsIgnoreCase(strVal)) paramVal = 0;
+                    if ("true".equalsIgnoreCase(strVal))
+                        paramVal = 1;
+                    else if ("false".equalsIgnoreCase(strVal))
+                        paramVal = 0;
                 }
                 params.add(paramVal);
             }
@@ -106,14 +114,15 @@ public class QueryService {
         }
     }
 
-    public QueryResponse execute(Connection connection, String sql, String role, String userId, String connectionId) throws SQLException {
+    public QueryResponse execute(Connection connection, String sql, String role, String userId, String connectionId)
+            throws SQLException {
         checkReadOnly(role, sql);
         long start = System.currentTimeMillis();
         String status = "SUCCESS";
         String errorMsg = null;
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(30);
-            statement.setMaxRows(MAX_ROWS + 1);
+            // statement.setMaxRows(MAX_ROWS + 1);
 
             boolean hasResultSet = statement.execute(sql);
             long elapsed = System.currentTimeMillis() - start;
@@ -136,9 +145,12 @@ public class QueryService {
                         String sch = metaData.getSchemaName(index);
                         String tab = metaData.getTableName(index);
                         if (tab != null && !tab.isEmpty()) {
-                            if (sch != null && !sch.isEmpty()) detectedTable = sch + "." + tab;
-                            else if (cat != null && !cat.isEmpty()) detectedTable = cat + "." + tab;
-                            else detectedTable = tab;
+                            if (sch != null && !sch.isEmpty())
+                                detectedTable = sch + "." + tab;
+                            else if (cat != null && !cat.isEmpty())
+                                detectedTable = cat + "." + tab;
+                            else
+                                detectedTable = tab;
                         }
                     }
                 }
@@ -146,10 +158,12 @@ public class QueryService {
                 List<List<String>> rows = new ArrayList<>();
                 boolean truncated = false;
                 while (resultSet.next()) {
-                    if (rows.size() == MAX_ROWS) {
-                        truncated = true;
-                        break;
-                    }
+                    // if (rows.size() == MAX_ROWS) {
+
+                    // truncated = true;
+
+                    // break;
+                    // }
                     List<String> row = new ArrayList<>();
                     for (int index = 1; index <= columnCount; index++) {
                         row.add(formatValue(resultSet.getObject(index)));
@@ -182,14 +196,16 @@ public class QueryService {
                 // Oracle: Önce EXPLAIN PLAN FOR çalıştırılır
                 statement.execute("EXPLAIN PLAN FOR " + sql);
                 // Ardından DBMS_XPLAN ile sonuç okunur
-                try (ResultSet resultSet = statement.executeQuery("SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY())")) {
+                try (ResultSet resultSet = statement
+                        .executeQuery("SELECT PLAN_TABLE_OUTPUT FROM TABLE(DBMS_XPLAN.DISPLAY())")) {
                     List<String> columns = List.of("PLAN_TABLE_OUTPUT");
                     List<List<String>> rows = new ArrayList<>();
                     while (resultSet.next()) {
                         rows.add(List.of(formatValue(resultSet.getObject(1))));
                     }
                     long elapsed = System.currentTimeMillis() - start;
-                    return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
+                    return new QueryResponse(columns, rows, null, false, elapsed,
+                            "Açıklama (Explain Plan) oluşturuldu.", null);
                 }
             } else if (isSqlServer) {
                 // MSSQL: SET SHOWPLAN_ALL ON çalıştırılır
@@ -212,7 +228,8 @@ public class QueryService {
                             rows.add(row);
                         }
                         long elapsed = System.currentTimeMillis() - start;
-                        return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
+                        return new QueryResponse(columns, rows, null, false, elapsed,
+                                "Açıklama (Explain Plan) oluşturuldu.", null);
                     }
                 } finally {
                     statement.execute("SET SHOWPLAN_ALL OFF");
@@ -237,7 +254,8 @@ public class QueryService {
                         rows.add(row);
                     }
                     long elapsed = System.currentTimeMillis() - start;
-                    return new QueryResponse(columns, rows, null, false, elapsed, "Açıklama (Explain Plan) oluşturuldu.", null);
+                    return new QueryResponse(columns, rows, null, false, elapsed,
+                            "Açıklama (Explain Plan) oluşturuldu.", null);
                 }
             }
         }
@@ -246,50 +264,57 @@ public class QueryService {
     void checkReadOnly(String role, String sql) {
         if ("READ_ONLY".equals(role)) {
             String upper = sql.trim().toUpperCase();
-            if (upper.startsWith("INSERT") || upper.startsWith("UPDATE") || upper.startsWith("DELETE") || 
-                upper.startsWith("DROP") || upper.startsWith("TRUNCATE") || upper.startsWith("CREATE") || 
-                upper.startsWith("ALTER") || upper.startsWith("GRANT") || upper.startsWith("REVOKE")) {
-                throw new SecurityException("Read-Only yetkisine sahipsiniz. Sadece SELECT sorguları çalıştırabilirsiniz.");
+            if (upper.startsWith("INSERT") || upper.startsWith("UPDATE") || upper.startsWith("DELETE") ||
+                    upper.startsWith("DROP") || upper.startsWith("TRUNCATE") || upper.startsWith("CREATE") ||
+                    upper.startsWith("ALTER") || upper.startsWith("GRANT") || upper.startsWith("REVOKE")) {
+                throw new SecurityException(
+                        "Read-Only yetkisine sahipsiniz. Sadece SELECT sorguları çalıştırabilirsiniz.");
             }
         }
     }
 
     private void logHistory(String userId, String connectionId, String sql, long elapsed, String status, String error) {
-        db.update("INSERT INTO query_history (id, user_id, connection_id, query_text, execution_time_ms, status, error_message) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        db.update(
+                "INSERT INTO query_history (id, user_id, connection_id, query_text, execution_time_ms, status, error_message) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 UUID.randomUUID().toString(), userId, connectionId, sql, elapsed, status, error);
     }
 
-    public QueryResponse executeMongo(MongoClient mongo, String commandJson, String role, String userId, String connectionId) throws Exception {
+    public QueryResponse executeMongo(MongoClient mongo, String commandJson, String role, String userId,
+            String connectionId) throws Exception {
         long start = System.currentTimeMillis();
         Document cmd;
         try {
             cmd = Document.parse(commandJson);
         } catch (Exception e) {
-            throw new Exception("Geçersiz JSON sorgusu. MongoDB için geçerli bir JSON objesi girin.\nÖrnek: {\"db\": \"veritabani\", \"find\": \"koleksiyon\"}");
+            throw new Exception(
+                    "Geçersiz JSON sorgusu. MongoDB için geçerli bir JSON objesi girin.\nÖrnek: {\"db\": \"veritabani\", \"find\": \"koleksiyon\"}");
         }
-        
+
         String dbName = cmd.getString("db");
         if (dbName == null) {
-            throw new Exception("Sorguda 'db' alanı eksik. Lütfen hedef veritabanını belirtin (Örn: {\"db\": \"test\"}).");
+            throw new Exception(
+                    "Sorguda 'db' alanı eksik. Lütfen hedef veritabanını belirtin (Örn: {\"db\": \"test\"}).");
         }
-        
+
         cmd.remove("db");
         MongoDatabase mdb = mongo.getDatabase(dbName);
-        
+
         if (cmd.containsKey("find")) {
             String collection = cmd.getString("find");
             Document filter = cmd.get("filter", Document.class);
-            if (filter == null) filter = new Document();
-            
+            if (filter == null)
+                filter = new Document();
+
             List<Document> docs = new ArrayList<>();
             mdb.getCollection(collection).find(filter).limit(MAX_ROWS).into(docs);
-            
+
             List<List<String>> rows = new ArrayList<>();
             List<String> columns = new ArrayList<>();
-            
+
             for (Document doc : docs) {
                 for (String key : doc.keySet()) {
-                    if (!columns.contains(key)) columns.add(key);
+                    if (!columns.contains(key))
+                        columns.add(key);
                 }
             }
             for (Document doc : docs) {
@@ -299,7 +324,7 @@ public class QueryService {
                 }
                 rows.add(row);
             }
-            
+
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, commandJson, elapsed, "SUCCESS", null);
             return new QueryResponse(columns, rows, null, true, elapsed, null, null);
@@ -308,7 +333,7 @@ public class QueryService {
             long elapsed = System.currentTimeMillis() - start;
             List<String> columns = List.of("Result");
             List<List<String>> rows = List.of(List.of(result.toJson()));
-            
+
             logHistory(userId, connectionId, commandJson, elapsed, "SUCCESS", null);
             return new QueryResponse(columns, rows, null, true, elapsed, "Komut başarıyla çalıştırıldı.", null);
         }
@@ -316,8 +341,11 @@ public class QueryService {
 
     public List<java.util.Map<String, Object>> getHistory(String userId, String connectionId) {
         try {
-            // connection_id filter removed so history persists across different connection sessions
-            return db.queryForList("SELECT query_text, execution_time_ms, status, CAST(created_at AS CHAR) as created_at FROM query_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50", userId);
+            // connection_id filter removed so history persists across different connection
+            // sessions
+            return db.queryForList(
+                    "SELECT query_text, execution_time_ms, status, CAST(created_at AS CHAR) as created_at FROM query_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
+                    userId);
         } catch (Exception e) {
             e.printStackTrace();
             return java.util.Collections.emptyList();
@@ -325,17 +353,23 @@ public class QueryService {
     }
 
     String formatValue(Object value) throws SQLException {
-        if (value == null) return null;
-        if (value instanceof Blob) return "[BINARY]";
-        if (value instanceof Clob clob) return clob.getSubString(1, (int) Math.min(clob.length(), 10_000));
-        if (value instanceof byte[]) return "[BINARY]";
+        if (value == null)
+            return null;
+        if (value instanceof Blob)
+            return "[BINARY]";
+        if (value instanceof Clob clob)
+            return clob.getSubString(1, (int) Math.min(clob.length(), 10_000));
+        if (value instanceof byte[])
+            return "[BINARY]";
         return String.valueOf(value);
     }
 
-    public QueryResponse executeRedis(redis.clients.jedis.JedisPooled redisClient, String command, String role, String userId, String connectionId) {
+    public QueryResponse executeRedis(redis.clients.jedis.JedisPooled redisClient, String command, String role,
+            String userId, String connectionId) {
         long start = System.currentTimeMillis();
         try {
-            // Assume command is a simple GET key or raw command JSON. We'll do a simple raw execute
+            // Assume command is a simple GET key or raw command JSON. We'll do a simple raw
+            // execute
             Object result;
             if (command.startsWith("{")) {
                 // Not supported for this basic iteration
@@ -343,13 +377,13 @@ public class QueryService {
             } else {
                 String[] parts = command.split(" ");
                 result = redisClient.sendCommand(
-                    () -> redis.clients.jedis.util.SafeEncoder.encode(parts[0]),
-                    java.util.Arrays.stream(parts).skip(1).map(redis.clients.jedis.util.SafeEncoder::encode).toArray(byte[][]::new)
-                );
+                        () -> redis.clients.jedis.util.SafeEncoder.encode(parts[0]),
+                        java.util.Arrays.stream(parts).skip(1).map(redis.clients.jedis.util.SafeEncoder::encode)
+                                .toArray(byte[][]::new));
             }
             long elapsed = System.currentTimeMillis() - start;
             List<String> columns = List.of("Result");
-            List<List<String>> rows = List.of(List.of(result != null ? new String((byte[])result) : "null"));
+            List<List<String>> rows = List.of(List.of(result != null ? new String((byte[]) result) : "null"));
             logHistory(userId, connectionId, command, elapsed, "SUCCESS", null);
             return new QueryResponse(columns, rows, null, true, elapsed, "Komut çalıştırıldı.", null);
         } catch (Exception e) {
@@ -359,16 +393,17 @@ public class QueryService {
         }
     }
 
-    public QueryResponse executeCassandra(com.datastax.oss.driver.api.core.CqlSession cassandra, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeCassandra(com.datastax.oss.driver.api.core.CqlSession cassandra, String sql,
+            String role, String userId, String connectionId) {
         long start = System.currentTimeMillis();
         checkReadOnly(role, sql);
         try {
             com.datastax.oss.driver.api.core.cql.ResultSet rs = cassandra.execute(sql);
             long elapsed = System.currentTimeMillis() - start;
-            
+
             List<String> columns = new ArrayList<>();
             rs.getColumnDefinitions().forEach(col -> columns.add(col.getName().toString()));
-            
+
             List<List<String>> rows = new ArrayList<>();
             rs.forEach(row -> {
                 List<String> r = new ArrayList<>();
@@ -387,7 +422,8 @@ public class QueryService {
         }
     }
 
-    public QueryResponse executeMemcached(net.spy.memcached.MemcachedClient memcached, String command, String role, String userId, String connectionId) {
+    public QueryResponse executeMemcached(net.spy.memcached.MemcachedClient memcached, String command, String role,
+            String userId, String connectionId) {
         long start = System.currentTimeMillis();
         try {
             Object result = null;
@@ -415,7 +451,8 @@ public class QueryService {
         }
     }
 
-    public QueryResponse executeNeo4j(org.neo4j.driver.Driver neo4j, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeNeo4j(org.neo4j.driver.Driver neo4j, String sql, String role, String userId,
+            String connectionId) {
         long start = System.currentTimeMillis();
         try (org.neo4j.driver.Session session = neo4j.session()) {
             org.neo4j.driver.Result result = session.run(sql);
@@ -439,39 +476,45 @@ public class QueryService {
         }
     }
 
-    public QueryResponse executeDynamoDb(software.amazon.awssdk.services.dynamodb.DynamoDbClient client, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeDynamoDb(software.amazon.awssdk.services.dynamodb.DynamoDbClient client, String sql,
+            String role, String userId, String connectionId) {
         long start = System.currentTimeMillis();
         try {
             // Very simplified mock execution
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
-            return new QueryResponse(List.of("Result"), List.of(List.of("DynamoDB query simulated: " + sql)), null, false, elapsed, null, null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("DynamoDB query simulated: " + sql)), null,
+                    false, elapsed, null, null);
         } catch (Exception e) {
             logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
             throw new RuntimeException("DynamoDB hatası: " + e.getMessage());
         }
     }
 
-    public QueryResponse executeArangoDb(com.arangodb.ArangoDB client, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeArangoDb(com.arangodb.ArangoDB client, String sql, String role, String userId,
+            String connectionId) {
         long start = System.currentTimeMillis();
         try {
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
-            return new QueryResponse(List.of("Result"), List.of(List.of("ArangoDB query simulated: " + sql)), null, false, elapsed, null, null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("ArangoDB query simulated: " + sql)), null,
+                    false, elapsed, null, null);
         } catch (Exception e) {
             logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
             throw new RuntimeException("ArangoDB hatası: " + e.getMessage());
         }
     }
 
-    public QueryResponse executeNeptune(org.apache.tinkerpop.gremlin.driver.Client client, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeNeptune(org.apache.tinkerpop.gremlin.driver.Client client, String sql, String role,
+            String userId, String connectionId) {
         long start = System.currentTimeMillis();
         try {
             List<org.apache.tinkerpop.gremlin.driver.Result> results = client.submit(sql).all().get();
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
             List<List<String>> rows = new ArrayList<>();
-            for (var r : results) rows.add(List.of(r.getString()));
+            for (var r : results)
+                rows.add(List.of(r.getString()));
             return new QueryResponse(List.of("Result"), rows, null, false, elapsed, null, null);
         } catch (Exception e) {
             logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
@@ -479,24 +522,28 @@ public class QueryService {
         }
     }
 
-    public QueryResponse executeHBase(org.apache.hadoop.hbase.client.Connection client, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeHBase(org.apache.hadoop.hbase.client.Connection client, String sql, String role,
+            String userId, String connectionId) {
         long start = System.currentTimeMillis();
         try {
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
-            return new QueryResponse(List.of("Result"), List.of(List.of("HBase query simulated: " + sql)), null, false, elapsed, null, null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("HBase query simulated: " + sql)), null, false,
+                    elapsed, null, null);
         } catch (Exception e) {
             logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
             throw new RuntimeException("HBase hatası: " + e.getMessage());
         }
     }
 
-    public QueryResponse executeCouchDb(String[] clientData, String sql, String role, String userId, String connectionId) {
+    public QueryResponse executeCouchDb(String[] clientData, String sql, String role, String userId,
+            String connectionId) {
         long start = System.currentTimeMillis();
         try {
             long elapsed = System.currentTimeMillis() - start;
             logHistory(userId, connectionId, sql, elapsed, "SUCCESS", null);
-            return new QueryResponse(List.of("Result"), List.of(List.of("CouchDB query simulated: " + sql)), null, false, elapsed, null, null);
+            return new QueryResponse(List.of("Result"), List.of(List.of("CouchDB query simulated: " + sql)), null,
+                    false, elapsed, null, null);
         } catch (Exception e) {
             logHistory(userId, connectionId, sql, System.currentTimeMillis() - start, "ERROR", e.getMessage());
             throw new RuntimeException("CouchDB hatası: " + e.getMessage());

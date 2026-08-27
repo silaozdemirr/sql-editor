@@ -415,9 +415,15 @@ public class SchemaService {
     /**
      * Belirli bir tablonun DDL (CREATE TABLE) kodunu döner.
      */
-    public String getDDL(Connection conn, String tableName) throws SQLException {
-        // SQL Injection'ı engellemek için tablo adındaki backtick'leri kaçırıyoruz
-        String sql = "SHOW CREATE TABLE `" + tableName.replace("`", "``") + "`";
+    public String getDDL(Connection conn, String database, String tableName) throws SQLException {
+        String safeTable = tableName.replace("`", "``");
+        String sql;
+        if (database != null && !database.trim().isEmpty()) {
+            String safeDb = database.replace("`", "``");
+            sql = "SHOW CREATE TABLE `" + safeDb + "`.`" + safeTable + "`";
+        } else {
+            sql = "SHOW CREATE TABLE `" + safeTable + "`";
+        }
         try (conn) {
             try (Statement st = conn.createStatement();
                  ResultSet rs = st.executeQuery(sql)) {

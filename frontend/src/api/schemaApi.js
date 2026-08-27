@@ -8,7 +8,8 @@ export const getDatabases = async (connectionToken) => {
 
 /** Bağlı oturumun belirli bir veritabanındaki tablo ve view listesini getirir. */
 export const getSchema = async (connectionToken, database = '') => {
-  const url = database ? `/schema?database=${encodeURIComponent(database)}` : '/schema';
+  const ts = new Date().getTime();
+  const url = database ? `/schema?database=${encodeURIComponent(database)}&_t=${ts}` : `/schema?_t=${ts}`;
   const response = await api.get(url, { headers: { 'X-Connection-Token': connectionToken } });
   return response.data;
 };
@@ -23,8 +24,9 @@ export const getTableColumns = async (connectionToken, tableName, database = '')
 };
 
 /** Bir tablonun DDL kodunu getirir. */
-export const getTableDDL = async (connectionToken, tableName) => {
-  const response = await api.get(`/schema/${encodeURIComponent(tableName)}/ddl`, {
+export const getTableDDL = async (connectionToken, database, tableName) => {
+  const url = database ? `/schema/${encodeURIComponent(tableName)}/ddl?database=${encodeURIComponent(database)}` : `/schema/${encodeURIComponent(tableName)}/ddl`;
+  const response = await api.get(url, {
     headers: { 'X-Connection-Token': connectionToken },
   });
   return response.data;

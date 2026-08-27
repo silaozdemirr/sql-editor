@@ -182,10 +182,11 @@ public class SchemaController {
     @GetMapping("/{tableName}/ddl")
     public ResponseEntity<String> getDDL(
             @org.springframework.web.bind.annotation.RequestHeader("X-Connection-Token") String token,
+            @RequestParam(value = "database", required = false) String database,
             org.springframework.security.core.Authentication auth,
             @PathVariable String tableName) {
         try (java.sql.Connection c = sessions.get(auth.getName(), token)) {
-            return ResponseEntity.ok(schemaService.getDDL(c, tableName));
+            return ResponseEntity.ok(schemaService.getDDL(c, database, tableName));
         } catch (SQLException e) {
             throw databaseError(e);
         }

@@ -33,15 +33,19 @@ public class DdlController {
             StringBuilder sql = new StringBuilder("CREATE TABLE ");
             sql.append("`").append(req.getDatabaseName()).append("`.`").append(req.getTableName()).append("` (");
             
+            java.util.List<String> pks = new java.util.ArrayList<>();
             for (int i = 0; i < req.getColumns().size(); i++) {
                 TableCreateRequest.ColumnDef c = req.getColumns().get(i);
                 sql.append("`").append(c.getName()).append("` ").append(c.getType());
                 
                 if (c.isNotNull()) sql.append(" NOT NULL");
                 if (c.isAutoIncrement()) sql.append(" AUTO_INCREMENT");
-                if (c.isPrimaryKey()) sql.append(" PRIMARY KEY");
+                if (c.isPrimaryKey()) pks.add("`" + c.getName() + "`");
                 
                 if (i < req.getColumns().size() - 1) sql.append(", ");
+            }
+            if (!pks.isEmpty()) {
+                sql.append(", PRIMARY KEY (").append(String.join(", ", pks)).append(")");
             }
             sql.append(");");
 
