@@ -2,13 +2,15 @@ import { lazy, Suspense, useCallback, useEffect, useState, useRef } from 'react'
 import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle, FiCode, FiDownload, FiMap, FiX, FiEye, FiPlus, FiUsers } from 'react-icons/fi';
 import { getSchema, getTableColumns, getTableDDL } from '../api/schemaApi';
 const SqlEditor = lazy(() => import('./SqlEditor'));
+import CreateTableModal from './CreateTableModal';
+import MockDataModal from './MockDataModal';
 const ErdViewer = lazy(() => import('./ErdViewer'));
 
 const ColumnIcon = ({ column }) => (
   column.primaryKey ? <FiKey className="schema-key" aria-label="Birincil anahtar" /> : <FiCircle className="schema-column-dot" aria-hidden="true" />
 );
 
-function SchemaItem({ item, connectionToken, currentDatabase, icon: Icon, onOpenDDL, onOpenTableData }) {
+function SchemaItem({ item, connectionToken, currentDatabase, icon: Icon, onOpenDDL, onOpenTableData, onOpenMockData }) {
   const [isOpen, setIsOpen] = useState(false);
   const [columns, setColumns] = useState(null);
   const [error, setError] = useState('');
@@ -18,7 +20,7 @@ function SchemaItem({ item, connectionToken, currentDatabase, icon: Icon, onOpen
     if (!nextOpen || columns) return;
     setError('');
     try { setColumns(await getTableColumns(connectionToken, item.name, currentDatabase)); }
-    catch (requestError) { setError(requestError.response?.data?.message || 'Kolonlar yüklenemedi.'); }
+    catch (requestError) { setError(requestError.response?.data?.message || 'Kolonlar yuklenemedi.'); }
   };
   return <li className="schema-item">
     <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }} className="schema-item-header">
@@ -26,11 +28,18 @@ function SchemaItem({ item, connectionToken, currentDatabase, icon: Icon, onOpen
         {isOpen ? <FiChevronDown /> : <FiChevronRight />}<Icon className="schema-table-icon" />
         <span className="tree-label">{item.name}</span>{(item.type === 'TABLE' || item.type === 'BASE TABLE') && <span className="row-count">{item.rowCount ?? 0}</span>}
       </button>
-      {onOpenDDL && (
-        <button type="button" className="ddl-button" title="DDL Kodu (CREATE TABLE)" onClick={(e) => { e.stopPropagation(); onOpenDDL(item.name); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '4px 8px', display: 'flex', alignItems: 'center' }}>
-          <FiCode size={16} />
-        </button>
-      )}
+      <div style={{ display: 'flex', gap: '4px' }}>
+        {onOpenMockData && (item.type === 'TABLE' || item.type === 'BASE TABLE') && (
+          <button type="button" className="ddl-button" title="Sentetik Veri Üret" onClick={(e) => { e.stopPropagation(); onOpenMockData(item.name); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '4px 6px', display: 'flex', alignItems: 'center' }}>
+            <FiDatabase size={15} />
+          </button>
+        )}
+        {onOpenDDL && (
+          <button type="button" className="ddl-button" title="DDL Kodu" onClick={(e) => { e.stopPropagation(); onOpenDDL(item.name); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', padding: '4px 6px', display: 'flex', alignItems: 'center' }}>
+            <FiCode size={15} />
+          </button>
+        )}
+      </div>
     </div>
     {isOpen && <ul className="column-list">
       {!columns && !error && <li className="schema-message">Kolonlar yükleniyor…</li>}
@@ -44,15 +53,22 @@ function SchemaItem({ item, connectionToken, currentDatabase, icon: Icon, onOpen
   </li>;
 }
 
-function SchemaGroup({ title, items, connectionToken, currentDatabase, icon, onOpenDDL, onOpenTableData, defaultOpen = false }) {
+function SchemaGroup({ title, items, connectionToken, currentDatabase, icon, onOpenDDL, onOpenTableData, onCreateTable, onOpenMockData, defaultOpen = false }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
   const Icon = icon;
   return <li className="schema-group">
-    <button className="tree-row group-row" type="button" onClick={() => setIsOpen((value) => !value)} aria-expanded={isOpen}>
-      {isOpen ? <FiChevronDown /> : <FiChevronRight />}<Icon className="schema-group-icon" />
-      <span className="tree-label">{title}</span><span className="tree-count">{items.length}</span>
-    </button>
-    {isOpen && <ul className="schema-list">{items.map((item) => <SchemaItem key={item.name} item={item} connectionToken={connectionToken} currentDatabase={currentDatabase} icon={title === 'Tablolar' ? FiTable : FiLayers} onOpenDDL={onOpenDDL} onOpenTableData={onOpenTableData} />)}</ul>}
+    <div style={{ display: 'flex', alignItems: 'center', width: '100%', justifyContent: 'space-between' }}>
+      <button className="tree-row group-row" type="button" onClick={() => setIsOpen((value) => !value)} aria-expanded={isOpen} style={{ flex: 1 }}>
+        {isOpen ? <FiChevronDown /> : <FiChevronRight />}<Icon className="schema-group-icon" />
+        <span className="tree-label">{title}</span><span className="tree-count">{items.length}</span>
+      </button>
+      {title === 'Tablolar' && onCreateTable && (
+        <button type="button" className="icon-button" onClick={onCreateTable} title="Yeni Tablo Oluştur" style={{ marginRight: '8px' }}>
+          <FiPlus size={14} />
+        </button>
+      )}
+    </div>
+    {isOpen && <ul className="schema-list">{items.map((item) => <SchemaItem key={item.name} item={item} connectionToken={connectionToken} currentDatabase={currentDatabase} icon={title === 'Tablolar' ? FiTable : FiLayers} onOpenDDL={onOpenDDL} onOpenTableData={onOpenTableData} onOpenMockData={onOpenMockData} />)}</ul>}
   </li>;
 }
 
@@ -106,7 +122,7 @@ function SavedScriptsGroup({ onOpenScript, currentDatabase }) {
 
 
 
-function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActiveTablesLoaded }) {
+function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActiveTablesLoaded, onCreateTable, onOpenMockData }) {
   const [schema, setSchema] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -222,7 +238,7 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
           {isLoading && <p className="schema-state" style={{ paddingLeft: '40px' }}>Yükleniyor...</p>}
           {error && <div className="schema-state error-state" style={{ paddingLeft: '40px' }}><FiAlertCircle /><span>{error}</span><button type="button" onClick={loadSchema}>Tekrar</button></div>}
           {schema && !isLoading && !error && <ul className="schema-list root-list" style={{ paddingLeft: '24px' }}>
-            <SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiTable} onOpenDDL={handleOpenDDL} onOpenTableData={handleOpenTableData} />
+            <SchemaGroup title="Tablolar" items={schema.tables || []} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiTable} onOpenDDL={handleOpenDDL} onOpenTableData={handleOpenTableData} onCreateTable={onCreateTable ? () => onCreateTable(dbName) : undefined} onOpenMockData={onOpenMockData ? (table) => onOpenMockData(dbName, table) : undefined} />
             {schema?.views && schema.views.length > 0 && <SchemaGroup title="Görünümler" items={schema.views} connectionToken={connectionInfo.connectionToken} currentDatabase={dbName} icon={FiEye} onOpenTableData={handleOpenTableData} />}
             <SavedScriptsGroup onOpenScript={(name, query) => sqlEditorRef.current?.openTab(name, query)} currentDatabase={dbName} />
           </ul>}
@@ -348,6 +364,8 @@ function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlE
               isActive={isActive}
               sqlEditorRef={sqlEditorRef}
               onActiveTablesLoaded={onActiveTablesLoaded}
+              onCreateTable={setCreateTableDb}
+              onOpenMockData={(db, tbl) => setMockDataTable({ database: db, table: tbl })}
             />
           ))}
           {!isLoading && !error && databases.length === 0 && (
@@ -378,6 +396,8 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
   const sqlEditorRefs = useRef({});
   const [activeTables, setActiveTables] = useState([]);
   const [splitToken, setSplitToken] = useState(null);
+  const [createTableDb, setCreateTableDb] = useState(null);
+  const [mockDataTable, setMockDataTable] = useState(null);
   
   const activeConnection = connections.find(c => c.connectionToken === activeToken) || connections[0];
 
@@ -555,6 +575,8 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
         </div>
       </Suspense>
     </section>
-  </main>;
+  {createTableDb && <CreateTableModal database={createTableDb} onClose={() => setCreateTableDb(null)} onCreated={() => { setCreateTableDb(null); }} />}
+      {mockDataTable && <MockDataModal database={mockDataTable.database} tableName={mockDataTable.table} connectionToken={activeConnection.connectionToken} onClose={() => setMockDataTable(null)} onGenerated={() => setMockDataTable(null)} />}
+    </main>;
 }
 

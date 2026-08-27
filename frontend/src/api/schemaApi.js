@@ -37,3 +37,16 @@ export const getErd = async (connectionToken, database = '') => {
   });
   return response.data;
 };
+
+export const createTable = async (data) => {
+  const token = sessionStorage.getItem('activeToken');
+  const response = await api.post('/ddl/create-table', data, { headers: { 'X-Connection-Token': token } });
+  return response.data;
+};
+
+export const generateMockData = async (data) => {
+  const token = sessionStorage.getItem('activeToken');
+  const response = await api.post('/mock/generate', data, { headers: { 'X-Connection-Token': token } });
+  return response.data;
+};
+
