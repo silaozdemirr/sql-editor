@@ -32,7 +32,7 @@ public class QueryService {
 
     public int updateCell(Connection connection, String role, com.sqleditor.model.QueryUpdateReq req)
             throws SQLException {
-        checkReadOnly(role, "UPDATE");
+        checkRolePermissions(role, "UPDATE");
         if (req.getTableName() == null || req.getTableName().isEmpty()) {
             throw new SQLException("Tablo adı tespit edilemedi. Düzenleme yapılamaz.");
         }
@@ -116,7 +116,7 @@ public class QueryService {
 
     public QueryResponse execute(Connection connection, String sql, String role, String userId, String connectionId)
             throws SQLException {
-        checkReadOnly(role, sql);
+        checkRolePermissions(role, sql);
         long start = System.currentTimeMillis();
         String status = "SUCCESS";
         String errorMsg = null;
@@ -261,14 +261,20 @@ public class QueryService {
         }
     }
 
-    void checkReadOnly(String role, String sql) {
+        void checkRolePermissions(String role, String sql) {
+        String upper = sql.trim().toUpperCase();
         if ("READ_ONLY".equals(role)) {
-            String upper = sql.trim().toUpperCase();
             if (upper.startsWith("INSERT") || upper.startsWith("UPDATE") || upper.startsWith("DELETE") ||
                     upper.startsWith("DROP") || upper.startsWith("TRUNCATE") || upper.startsWith("CREATE") ||
                     upper.startsWith("ALTER") || upper.startsWith("GRANT") || upper.startsWith("REVOKE")) {
                 throw new SecurityException(
-                        "Read-Only yetkisine sahipsiniz. Sadece SELECT sorguları çalıştırabilirsiniz.");
+                        "READ_ONLY yetkisine sahipsiniz. Sadece SELECT (okuma) sorguları çalıştırabilirsiniz.");
+            }
+        } else if ("EDITOR".equals(role)) {
+            if (upper.startsWith("DROP") || upper.startsWith("TRUNCATE") || upper.startsWith("CREATE") ||
+                    upper.startsWith("ALTER") || upper.startsWith("GRANT") || upper.startsWith("REVOKE")) {
+                throw new SecurityException(
+                        "EDITOR yetkisine sahipsiniz. Tablo oluşturma, silme veya kolon ismi değiştirme (CREATE, DROP, ALTER vb.) gibi şema değişiklikleri yapamazsınız.");
             }
         }
     }
@@ -396,7 +402,7 @@ public class QueryService {
     public QueryResponse executeCassandra(com.datastax.oss.driver.api.core.CqlSession cassandra, String sql,
             String role, String userId, String connectionId) {
         long start = System.currentTimeMillis();
-        checkReadOnly(role, sql);
+        checkRolePermissions(role, sql);
         try {
             com.datastax.oss.driver.api.core.cql.ResultSet rs = cassandra.execute(sql);
             long elapsed = System.currentTimeMillis() - start;

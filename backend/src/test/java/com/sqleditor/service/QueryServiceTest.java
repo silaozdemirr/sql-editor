@@ -34,21 +34,30 @@ public class QueryServiceTest {
     }
 
     @Test
-    public void testCheckReadOnly() {
-        // ADMIN rolündeki biri her sorguyu atabilir, hata fırlatmamalı
-        assertDoesNotThrow(() -> queryService.checkReadOnly("ADMIN", "UPDATE"));
+    public void testCheckRolePermissions() {
+        // ADMIN
+        assertDoesNotThrow(() -> queryService.checkRolePermissions("ADMIN", "UPDATE"));
         
-        // READ_ONLY rolündeki biri SELECT sorgusu atabilir
-        assertDoesNotThrow(() -> queryService.checkReadOnly("READ_ONLY", "SELECT * FROM users"));
+        // READ_ONLY
+        assertDoesNotThrow(() -> queryService.checkRolePermissions("READ_ONLY", "SELECT * FROM users"));
+        assertDoesNotThrow(() -> queryService.checkRolePermissions("READ_ONLY", "EXPLAIN SELECT * FROM users"));
         
-        // READ_ONLY rolündeki biri EXPLAIN sorgusu atabilir
-        assertDoesNotThrow(() -> queryService.checkReadOnly("READ_ONLY", "EXPLAIN SELECT * FROM users"));
+        SecurityException ex1 = assertThrows(SecurityException.class, () -> queryService.checkRolePermissions("READ_ONLY", "UPDATE users SET age = 20"));
+        assertTrue(ex1.getMessage().contains("READ_ONLY"));
         
-        // READ_ONLY rolündeki biri UPDATE, DELETE veya INSERT atamaz! Exception fırlatmalı.
-        SecurityException ex1 = assertThrows(SecurityException.class, () -> queryService.checkReadOnly("READ_ONLY", "UPDATE users SET age = 20"));
-        assertTrue(ex1.getMessage().contains("Read-Only"));
+        SecurityException ex2 = assertThrows(SecurityException.class, () -> queryService.checkRolePermissions("READ_ONLY", "DROP TABLE users"));
+        assertTrue(ex2.getMessage().contains("READ_ONLY"));
         
-        SecurityException ex2 = assertThrows(SecurityException.class, () -> queryService.checkReadOnly("READ_ONLY", "DROP TABLE users"));
-        assertTrue(ex2.getMessage().contains("Read-Only"));
+        // EDITOR
+        assertDoesNotThrow(() -> queryService.checkRolePermissions("EDITOR", "SELECT * FROM users"));
+        assertDoesNotThrow(() -> queryService.checkRolePermissions("EDITOR", "UPDATE users SET age = 20"));
+        assertDoesNotThrow(() -> queryService.checkRolePermissions("EDITOR", "INSERT INTO users (name) VALUES ('test')"));
+        
+        SecurityException ex3 = assertThrows(SecurityException.class, () -> queryService.checkRolePermissions("EDITOR", "DROP TABLE users"));
+        assertTrue(ex3.getMessage().contains("EDITOR"));
+        
+        SecurityException ex4 = assertThrows(SecurityException.class, () -> queryService.checkRolePermissions("EDITOR", "ALTER TABLE users ADD COLUMN name VARCHAR(50)"));
+        assertTrue(ex4.getMessage().contains("EDITOR"));
     }
+
 }
