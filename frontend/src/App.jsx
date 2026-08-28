@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import ConnectionPanel from './components/ConnectionPanel';
+import BackgroundTaskManager from './components/BackgroundTaskManager';
 import SchemaExplorer from './components/SchemaExplorer';
 import AdminPanel from './components/AdminPanel';
 import './index.css';
@@ -201,6 +202,7 @@ function App() {
       />
       {showAdminPanel && <AdminPanel onClose={() => setShowAdminPanel(false)} />}
       
+      <BackgroundTaskManager />
       {showAddConnection && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
           <div style={{ position: 'relative', width: '100%', maxWidth: '900px', margin: 'auto' }}>

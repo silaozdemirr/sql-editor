@@ -3,6 +3,8 @@ package com.sqleditor.controller;
 import com.sqleditor.model.MockDataRequest;
 import com.sqleditor.service.ConnectionSessionService;
 import com.sqleditor.service.QueryService;
+import com.sqleditor.service.TaskService;
+import com.sqleditor.model.TaskProgress;
 import jakarta.validation.Valid;
 import net.datafaker.Faker;
 import org.springframework.http.HttpStatus;
@@ -19,13 +21,29 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/mock")
 public class MockDataController {
+    @DeleteMapping("/progress/{taskId}")
+    public ResponseEntity<?> cancelTask(@PathVariable String taskId) {
+        taskService.cancelTask(taskId);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/progress/{taskId}")
+    public ResponseEntity<TaskProgress> getProgress(@PathVariable String taskId) {
+        TaskProgress p = taskService.getProgress(taskId);
+        if (p == null) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(p);
+    }
+
     private final ConnectionSessionService sessions;
     private final QueryService queryService;
     private final Faker faker = new Faker(new java.util.Locale("tr"));
 
-    public MockDataController(ConnectionSessionService sessions, QueryService queryService) {
+    private final TaskService taskService;
+
+    public MockDataController(ConnectionSessionService sessions, QueryService queryService, TaskService taskService) {
         this.sessions = sessions;
         this.queryService = queryService;
+        this.taskService = taskService;
     }
 
     @PostMapping("/generate")
@@ -37,37 +55,57 @@ public class MockDataController {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sadece okuma yetkiniz var.");
         }
 
-        try (Connection conn = sessions.get(auth.getName(), token)) {
-            StringBuilder sql = new StringBuilder("INSERT INTO `")
-                    .append(req.getDatabaseName()).append("`.`").append(req.getTableName()).append("` (");
-            
-            StringBuilder placeholders = new StringBuilder();
-            for (int i = 0; i < req.getMappings().size(); i++) {
-                sql.append("`").append(req.getMappings().get(i).getColumnName()).append("`");
-                placeholders.append("?");
-                if (i < req.getMappings().size() - 1) {
-                    sql.append(", ");
-                    placeholders.append(", ");
-                }
-            }
-            sql.append(") VALUES (").append(placeholders).append(")");
 
-            try (PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
-                for (int r = 0; r < req.getRowCount(); r++) {
-                    for (int i = 0; i < req.getMappings().size(); i++) {
-                        String type = req.getMappings().get(i).getFakerType();
-                        Object val = generateValue(type);
-                        pstmt.setObject(i + 1, val);
-                    }
-                    pstmt.addBatch();
-                    if (r % 500 == 0 || r == req.getRowCount() - 1) {
-                        pstmt.executeBatch();
+        String taskId = taskService.submitTask(req.getTableName(), req.getRowCount(), (progress) -> {
+            try (Connection conn = sessions.get(auth.getName(), token)) {
+                StringBuilder sql = new StringBuilder("INSERT INTO ")
+                        .append(req.getDatabaseName()).append(".").append(req.getTableName()).append(" (");
+                
+                StringBuilder placeholders = new StringBuilder();
+                for (int i = 0; i < req.getMappings().size(); i++) {
+                    sql.append("").append(req.getMappings().get(i).getColumnName()).append("");
+                    placeholders.append("?");
+                    if (i < req.getMappings().size() - 1) {
+                        sql.append(", ");
+                        placeholders.append(", ");
                     }
                 }
+                sql.append(") VALUES (").append(placeholders).append(")");
+
+                // Optimization: Batch size up to 5000 for faster insert
+                int batchSize = 5000;
+                
+                try (PreparedStatement pstmt = conn.prepareStatement(sql.toString())) {
+                    long startTime = System.currentTimeMillis();
+                    for (int r = 0; r < req.getRowCount(); r++) {
+                        if ("CANCELLED".equals(progress.getStatus())) {
+                            break;
+                        }
+                        for (int i = 0; i < req.getMappings().size(); i++) {
+                            String type = req.getMappings().get(i).getFakerType();
+                            Object val = generateValue(type);
+                            pstmt.setObject(i + 1, val);
+                        }
+                        pstmt.addBatch();
+                        
+                        progress.setProcessedRows(r + 1);
+                        if ((r + 1) % batchSize == 0) {
+                            pstmt.executeBatch();
+                            long elapsed = System.currentTimeMillis() - startTime;
+                            long avgTimePerRow = elapsed / r;
+                            progress.setEstimatedTimeRemainingMs(avgTimePerRow * (req.getRowCount() - r));
+                        }
+                    }
+                    pstmt.executeBatch(); // flush remaining
+                }
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
-            return ResponseEntity.ok(java.util.Map.of("message", req.getRowCount() + " satir sentetik veri olusturuldu."));
-        }
+        });
+
+        return ResponseEntity.ok(java.util.Map.of("taskId", taskId));
     }
+
 
     private Object generateValue(String type) {
         return switch (type) {

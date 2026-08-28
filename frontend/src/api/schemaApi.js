@@ -52,3 +52,13 @@ export const generateMockData = async (data) => {
   return response.data;
 };
 
+
+export const getTaskProgress = async (taskId) => {
+  const response = await api.get(`/mock/progress/${taskId}`);
+  return response.data;
+};
+
+export const cancelMockDataTask = async (taskId) => {
+  const response = await api.delete(`/mock/progress/${taskId}`);
+  return response.data;
+};

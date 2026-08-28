@@ -422,12 +422,12 @@ public class ConnectionSessionService {
     private String url(Stored s) {
         return switch (s.type().toUpperCase()) {
             case "MYSQL" -> "jdbc:mysql://" + s.host() + ":" + s.port() + "/" + s.database()
-                    + "?useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8&sessionVariables=time_zone='%2B03:00'";
-            case "POSTGRESQL" -> "jdbc:postgresql://" + s.host() + ":" + s.port() + "/" + s.database();
+                    + "?useSSL=false&allowPublicKeyRetrieval=true&allowMultiQueries=true&rewriteBatchedStatements=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8&sessionVariables=time_zone='%2B03:00'";
+            case "POSTGRESQL" -> "jdbc:postgresql://" + s.host() + ":" + s.port() + "/" + s.database() + "?reWriteBatchedInserts=true";
             case "MSSQL" -> "jdbc:sqlserver://" + s.host() + ":" + s.port() + ";databaseName=" + s.database() + ";encrypt=false";
             case "ORACLE" -> "jdbc:oracle:thin:@//" + s.host() + ":" + s.port() + "/" + s.database();
             case "MARIADB" -> "jdbc:mariadb://" + s.host() + ":" + s.port() + "/" + s.database() 
-                    + "?useSSL=false&characterEncoding=UTF-8";
+                    + "?useSSL=false&characterEncoding=UTF-8&rewriteBatchedStatements=true";
             case "SQLITE" -> "jdbc:sqlite:" + s.database();
             default -> throw new IllegalArgumentException("Desteklenmeyen veritabanı tipi: " + s.type());
         };

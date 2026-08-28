@@ -183,8 +183,7 @@ public class SchemaService {
                 String sql = """
                     SELECT
                         t.TABLE_NAME,
-                        t.TABLE_TYPE,
-                        COALESCE(t.TABLE_ROWS, 0) AS TABLE_ROWS
+                        t.TABLE_TYPE
                     FROM information_schema.TABLES t
                     WHERE t.TABLE_SCHEMA = ?
                     ORDER BY t.TABLE_TYPE DESC, t.TABLE_NAME ASC
@@ -197,7 +196,15 @@ public class SchemaService {
                         while (rs.next()) {
                             String name = rs.getString("TABLE_NAME");
                             String type = rs.getString("TABLE_TYPE");
-                            int    rows = rs.getInt("TABLE_ROWS");
+                            int rows = 0;
+                            
+                            // Get real count
+                            if (!"VIEW".equals(type)) {
+                                try (java.sql.Statement st = conn.createStatement();
+                                     java.sql.ResultSet countRs = st.executeQuery("SELECT COUNT(*) FROM " + databaseName + "." + name + "")) {
+                                     if (countRs.next()) rows = countRs.getInt(1);
+                                } catch (Exception ignored) {}
+                            }
 
                             TableInfo info = new TableInfo(name, type, rows);
 

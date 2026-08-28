@@ -529,7 +529,6 @@ body {
   color: white;
   font-weight: 500;
   box-shadow: 0 2px 12px rgba(29, 78, 216, 0.25);
-  animation: buttonGlow 3s infinite;
 }
 
 .btn-primary:hover:not(:disabled) {

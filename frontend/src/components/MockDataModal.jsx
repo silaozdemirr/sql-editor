@@ -107,13 +107,13 @@ export default function MockDataModal({ database, tableName, connectionToken, on
     try {
       setIsSubmitting(true);
       setError('');
-      await generateMockData({
-        databaseName: database,
-        tableName: tableName,
-        rowCount: parseInt(rowCount, 10),
-        mappings: payloadMappings
-      });
-      alert(rowCount + " satır sentetik veri başarıyla tabloya eklendi!\n(Verileri görmek için tablonun üzerine tıklayabilirsiniz)");
+      const res = await generateMockData({
+          databaseName: database,
+          tableName: tableName,
+          rowCount: parseInt(rowCount, 10),
+          mappings: payloadMappings
+        });
+        window.dispatchEvent(new CustomEvent('mockDataTaskStarted', { detail: { taskId: res.taskId, tableName: tableName } }));
       onGenerated();
     } catch (err) {
       setError(err.response?.data?.message || err.message);
