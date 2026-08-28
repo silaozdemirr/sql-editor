@@ -1,5 +1,5 @@
 import { lazy, Suspense, useCallback, useEffect, useState, useRef } from 'react';
-import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle, FiCode, FiDownload, FiMap, FiX, FiEye, FiPlus, FiUsers } from 'react-icons/fi';
+import { FiChevronDown, FiChevronRight, FiCircle, FiDatabase, FiKey, FiLayers, FiLogOut, FiRefreshCw, FiTable, FiAlertCircle, FiCode, FiDownload, FiMap, FiX, FiEye, FiPlus, FiUsers, FiShield } from 'react-icons/fi';
 import { getSchema, getTableColumns, getTableDDL } from '../api/schemaApi';
 const SqlEditor = lazy(() => import('./SqlEditor'));
 import CreateTableModal from './CreateTableModal';
@@ -307,6 +307,12 @@ function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlE
     }
   }, [isExpanded, databases.length, loadDatabases, error]);
 
+    useEffect(() => {
+      if (isExpanded && refreshCounter > 0) {
+        loadDatabases();
+      }
+    }, [refreshCounter, isExpanded, loadDatabases]);
+
   const handleDumpDatabase = async (e) => {
     e.stopPropagation();
     try {
@@ -503,14 +509,22 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
       </section>
       <footer className="explorer-footer" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span>{connections.length} bağlantı açık</span>
-          <button className="disconnect-link" type="button" onClick={onDisconnectAll}><FiLogOut /> Hepsini Kapat</button>
+          <span style={{ fontSize: '11px', opacity: 0.7 }}>{connections.length} bağlantı açık</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', padding: '2px 6px', background: 'var(--bg-layer-2)', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+            <FiShield size={12} /> {userRole === 'READ_ONLY' ? 'SADECE OKUMA' : (userRole === 'EDITOR' ? 'EDİTÖR' : 'ADMİN')}
+          </div>
         </div>
-        {userRole === 'ADMIN' && (
-          <button className="btn btn-secondary btn-sm" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }} onClick={onOpenAdmin}>
-            <FiUsers /> Admin Paneli
+        
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', background: 'var(--bg-card)' }} onClick={onDisconnectAll}>
+            <FiLogOut /> Çıkış Yap
           </button>
-        )}
+          {userRole === 'ADMIN' && (
+            <button className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '6px' }} onClick={onOpenAdmin}>
+              <FiUsers /> Admin Paneli
+            </button>
+          )}
+        </div>
       </footer>
     </aside>
     <section className="workspace-main" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -599,14 +613,7 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
                   borderRight: (isVisible && splitToken && conn.connectionToken === activeToken && activeToken !== splitToken) ? '2px solid var(--border-subtle)' : 'none'
                 }}
               >
-                <SqlEditor 
-                  ref={el => sqlEditorRefs.current[conn.connectionToken] = el}
-                  connectionToken={conn.connectionToken} 
-                  currentDatabase={conn.databaseName || conn.database || 'varsayilan_db'}
-                  userRole={userRole} 
-                  dbType={conn.dbType}
-                  tables={conn.connectionToken === activeToken ? activeTables : []}
-                />
+                <SqlEditor ref={el => sqlEditorRefs.current[conn.connectionToken] = el} connectionToken={conn.connectionToken} currentDatabase={conn.databaseName || conn.database || 'varsayilan_db'} userRole={userRole} dbType={conn.dbType} tables={conn.connectionToken === activeToken ? activeTables : []} onDdlExecuted={() => { console.log("onDdlExecuted callback fired! Incrementing counter..."); setTimeout(() => setRefreshCounter(c => c + 1), 500); }} />
               </div>
             );
           })}

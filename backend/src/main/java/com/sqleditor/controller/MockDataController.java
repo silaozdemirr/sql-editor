@@ -33,7 +33,7 @@ public class MockDataController {
                                                                           @RequestHeader("X-Connection-Token") String token,
                                                                           Authentication auth) throws Exception {
         String role = auth.getAuthorities().iterator().next().getAuthority();
-        if ("READ_ONLY".equals(role)) {
+        if (role != null && role.contains("READ_ONLY")) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sadece okuma yetkiniz var.");
         }
 

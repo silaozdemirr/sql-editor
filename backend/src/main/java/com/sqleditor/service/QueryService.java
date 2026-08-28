@@ -262,6 +262,7 @@ public class QueryService {
     }
 
         void checkRolePermissions(String role, String sql) {
+        if (role != null && role.startsWith("ROLE_")) role = role.substring(5);
         String upper = sql.trim().toUpperCase();
         if ("READ_ONLY".equals(role)) {
             if (upper.startsWith("INSERT") || upper.startsWith("UPDATE") || upper.startsWith("DELETE") ||

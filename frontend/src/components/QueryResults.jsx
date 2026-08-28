@@ -116,7 +116,7 @@ const formatDataForGrid = (data, isEditable = false) => {
   return { rowData, colDefs };
 };
 
-export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken }) {
+export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken, userRole }) {
   const [activeTab, setActiveTab] = useState('results');
   const [history, setHistory] = useState(null);
   const [historyError, setHistoryError] = useState('');
@@ -132,7 +132,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
 
   const hasRows = result?.columns?.length > 0;
   
-  const { rowData: resultRowData, colDefs: resultColDefs } = useMemo(() => formatDataForGrid(result, !!result?.tableName), [result]);
+  const { rowData: resultRowData, colDefs: resultColDefs } = useMemo(() => formatDataForGrid(result, userRole !== "READ_ONLY" && !!result?.tableName), [result, userRole]);
   const { rowData: explainRowData, colDefs: explainColDefs } = useMemo(() => formatDataForGrid(explainResult, false), [explainResult]);
 
   const handleCellValueChanged = async (params) => {
@@ -171,7 +171,8 @@ export default function QueryResults({ result, error, explainResult, explainErro
       const res = await updateCell(result.tableName, colDef.field, newValue, oldRowValues, connectionToken);
       console.log("Update success:", res);
     } catch (err) {
-      params.node.setDataValue(colDef.field, oldValue);
+      data[colDef.field] = oldValue;
+      params.api.refreshCells({ rowNodes: [params.node], force: true });
       alert(err.response?.data?.message || 'Hücre güncellenemedi.');
     }
   };
@@ -292,7 +293,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
       <div style={{ marginLeft: 'auto', paddingRight: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
         {activeTab === 'results' && hasRows && (
           <>
-            {result?.tableName && (
+            {result?.tableName && userRole !== 'READ_ONLY' && (
               <>
                 <button type="button" onClick={handleAddRow} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)', color: '#3b82f6', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Yeni boş satır ekle">
                   <FiPlus size={13} />

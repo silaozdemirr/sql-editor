@@ -19,7 +19,7 @@ public class AiService {
     private final ObjectMapper mapper = new ObjectMapper();
 
     public String generateSql(String prompt, String schemaContext, String dbType, String apiKey) throws Exception {
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.7-flash:generateContent?key=" + apiKey;
+        String url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=" + apiKey;
 
         String systemInstruction = "Sen bir SQL uzmanısın. Kullanıcının isteğine göre SADECE GEÇERLİ BİR SQL SORGUSU üretmelisin. " +
                 "Veritabanı türü: " + dbType + ". " +

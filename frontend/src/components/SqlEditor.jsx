@@ -9,7 +9,7 @@ import QueryResults from './QueryResults';
 
 const INITIAL_SQL = ``;
 
-const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbType = 'MYSQL', tables = [] }, ref) => {
+const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbType = 'MYSQL', tables = [], onDdlExecuted }, ref) => {
   const [tabs, setTabs] = useState([{
     id: 1, title: 'SQL Query 1', query: INITIAL_SQL, notice: 'Sorguyu çalıştırmak için Ctrl + Enter kullanın.', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: ''
   }]);
@@ -187,14 +187,40 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
       const result = await executeQuery(connectionToken, executableSql);
       
       // Backend returns 200 OK with error message starting with "Sorgu hatası:" to prevent console spam
-      if (result && result.message && result.message.startsWith("Sorgu hatası:")) {
+      if (result && result.message && result.message.startsWith("Sorgu hatas")) {
         let errorMsg = result.message;
-        if (errorMsg.toLowerCase().includes("you have an error in your sql syntax") && executableSql.includes(";")) {
-           errorMsg += "\n\nİPUCU: Birden fazla sorguyu aynı anda çalıştırırken hata alıyorsanız, lütfen çalıştırmak istediğiniz satırı veya bloğu fareyle seçip tek tek (Ctrl + Enter) çalıştırın.";
+        const lowerErr = errorMsg.toLowerCase();
+        
+        if (lowerErr.includes("you have an error in your sql syntax") && executableSql.includes(";")) {
+           errorMsg += `\n\n💡 TIP: If you are running multiple queries at once and getting an error, please select the specific block or line with your mouse and run it individually (Ctrl + Enter).`;
         }
-        updateTab(activeTabId, { queryError: errorMsg, notice: 'Sorgu hatayla tamamlandı.' });
+        
+        if (lowerErr.includes("no database selected")) {
+           if (executableSql.match(/(?:FROM|TABLE|INTO|UPDATE)\s+[a-zA-Z0-9_]+\s*(?:$|\s|;)/i)) {
+               errorMsg += `\n\n💡 TIP: You MUST specify the database name before the table name! Use the 'database_name.table_name' format (e.g. \`filmler_db.filmler\`).`;
+           } else if (executableSql.match(/[a-zA-Z0-9_]+\s*\(\s*['"]/)) {
+               errorMsg += `\n\n💡 TIP: MySQL thinks you are trying to call a function because of a SYNTAX ERROR. Did you forget an operator like '='? (e.g. writing \`name ('John')\` instead of \`name = ('John')\`).`;
+           } else {
+               errorMsg += `\n\n💡 TIP: MySQL doesn't know which database to use! You must prefix your tables with the database name (e.g. \`db_name.table_name\`). If you did, you might have a syntax error causing MySQL to look for a function.`;
+           }
+        }
+        
+        if (lowerErr.includes("function") && lowerErr.includes("does not exist")) {
+           errorMsg += `\n\n💡 TIP: Function does not exist! If you didn't mean to call a function, you probably forgot an operator like '=' (e.g. writing name ('John') makes MySQL think it's a function).`;
+        }
+        
+        if (lowerErr.includes("unknown column") && executableSql.includes('"')) {
+           errorMsg += `\n\n💡 TIP: 'Unknown column' error! You should always use SINGLE QUOTES (') for string values in SQL. Using double quotes (") makes MySQL think it is a column name.`;
+        }
+
+        updateTab(activeTabId, { queryError: errorMsg, notice: 'Query failed.' });
       } else {
         updateTab(activeTabId, { queryResult: result, notice: `${result.executionTimeMs} ms içinde tamamlandı.` });
+          
+          const upperSql = executableSql.toUpperCase();
+          if (upperSql.includes("CREATE ") || upperSql.includes("DROP ") || upperSql.includes("ALTER ") || upperSql.includes("RENAME ") || upperSql.includes("TRUNCATE ")) {
+              if (onDdlExecuted) onDdlExecuted();
+          }
       }
       
       try {
@@ -373,7 +399,8 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
           explainResult={activeTab.explainResult}
           explainError={activeTab.explainError}
           isRunning={activeTab.isRunning} 
-          connectionToken={connectionToken} 
+          connectionToken={connectionToken}
+            userRole={userRole} 
         />
       </div>
 
