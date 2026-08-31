@@ -122,7 +122,7 @@ public class QueryService {
         String errorMsg = null;
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(30);
-            // statement.setMaxRows(MAX_ROWS + 1);
+            statement.setMaxRows(MAX_ROWS + 1);
 
             boolean hasResultSet = statement.execute(sql);
             long elapsed = System.currentTimeMillis() - start;
@@ -158,12 +158,12 @@ public class QueryService {
                 List<List<String>> rows = new ArrayList<>();
                 boolean truncated = false;
                 while (resultSet.next()) {
-                    // if (rows.size() == MAX_ROWS) {
+                    if (rows.size() == MAX_ROWS) {
 
-                    // truncated = true;
+                    truncated = true;
 
-                    // break;
-                    // }
+                    break;
+                    }
                     List<String> row = new ArrayList<>();
                     for (int index = 1; index <= columnCount; index++) {
                         row.add(formatValue(resultSet.getObject(index)));

@@ -92,8 +92,10 @@ public class MockDataController {
                         if ((r + 1) % batchSize == 0) {
                             pstmt.executeBatch();
                             long elapsed = System.currentTimeMillis() - startTime;
-                            long avgTimePerRow = elapsed / r;
-                            progress.setEstimatedTimeRemainingMs(avgTimePerRow * (req.getRowCount() - r));
+                            // Multiply before division to prevent integer rounding to zero
+                            long remainingRows = req.getRowCount() - (r + 1);
+                            long remainingMs = (elapsed * remainingRows) / (r + 1);
+                            progress.setEstimatedTimeRemainingMs(Math.max(1, remainingMs));
                         }
                     }
                     pstmt.executeBatch(); // flush remaining

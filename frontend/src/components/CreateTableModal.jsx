@@ -76,7 +76,7 @@ export default function CreateTableModal({ database, onClose, onCreated }) {
           <div className="form-group">
             <label className="form-label" style={{ fontWeight: '500', marginBottom: '8px' }}>Tablo Adı</label>
             <input 
-              className="form-input" 
+              className="form-input" style={{ paddingLeft: "14px" }} 
               value={tableName} 
               onChange={e => setTableName(e.target.value)} 
               placeholder="Örn: kullanicilar" 
@@ -106,29 +106,29 @@ export default function CreateTableModal({ database, onClose, onCreated }) {
                   {columns.map(c => (
                     <tr key={c.id}>
                       <td style={{ padding: '8px' }}>
-                        <input className="form-input" style={{ width: '100%' }} value={c.name} onChange={e => updateColumn(c.id, 'name', e.target.value)} placeholder="kolon_adi" />
+                        <input className="form-input" style={{ width: '100%', paddingLeft: '12px' }} value={c.name} onChange={e => updateColumn(c.id, 'name', e.target.value)} placeholder="kolon_adi" />
                       </td>
                       <td style={{ padding: '8px' }}>
-                        <select className="form-input" style={{ width: '100%', cursor: 'pointer' }} value={c.type} onChange={e => updateColumn(c.id, 'type', e.target.value)}>
+                        <select className="form-input" style={{ width: '100%', cursor: 'pointer', paddingLeft: '12px' }} value={c.type} onChange={e => updateColumn(c.id, 'type', e.target.value)}>
                           {DATA_TYPES.map(type => (
                             <option key={type} value={type}>{type}</option>
                           ))}
                         </select>
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
-                        <select className="form-input" style={{ width: '70px', display: 'inline-block', cursor: 'pointer' }} value={c.primaryKey ? "1" : "0"} onChange={e => updateColumn(c.id, 'primaryKey', e.target.value === "1")}>
+                        <select className="form-input" style={{ width: '85px', display: 'inline-block', cursor: 'pointer', paddingLeft: '8px' }} value={c.primaryKey ? "1" : "0"} onChange={e => updateColumn(c.id, 'primaryKey', e.target.value === "1")}>
                           <option value="1">Evet</option>
                           <option value="0">Hayır</option>
                         </select>
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
-                        <select className="form-input" style={{ width: '70px', display: 'inline-block', cursor: 'pointer' }} value={c.notNull ? "1" : "0"} onChange={e => updateColumn(c.id, 'notNull', e.target.value === "1")}>
+                        <select className="form-input" style={{ width: '85px', display: 'inline-block', cursor: 'pointer', paddingLeft: '8px' }} value={c.notNull ? "1" : "0"} onChange={e => updateColumn(c.id, 'notNull', e.target.value === "1")}>
                           <option value="1">Evet</option>
                           <option value="0">Hayır</option>
                         </select>
                       </td>
                       <td style={{ padding: '8px', textAlign: 'center' }}>
-                        <select className="form-input" style={{ width: '70px', display: 'inline-block', cursor: 'pointer' }} value={c.autoIncrement ? "1" : "0"} onChange={e => updateColumn(c.id, 'autoIncrement', e.target.value === "1")}>
+                        <select className="form-input" style={{ width: '85px', display: 'inline-block', cursor: 'pointer', paddingLeft: '8px' }} value={c.autoIncrement ? "1" : "0"} onChange={e => updateColumn(c.id, 'autoIncrement', e.target.value === "1")}>
                           <option value="1">Evet</option>
                           <option value="0">Hayır</option>
                         </select>

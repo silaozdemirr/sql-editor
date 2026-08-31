@@ -32,8 +32,16 @@ export default function BackgroundTaskManager() {
           const data = await getTaskProgress(task.taskId);
           setTasks(prev => {
             const current = prev[task.taskId];
-            if (!current) return prev;
-            return {
+              if (!current) return prev;
+              
+              if (current.status === 'RUNNING' && data.status === 'DONE') {
+                setTimeout(() => {
+                  if (window.__triggerSchemaRefresh) {
+                    window.__triggerSchemaRefresh();
+                  }
+                }, 1000);
+              }
+              return {
               ...prev,
               [task.taskId]: {
                 ...current,

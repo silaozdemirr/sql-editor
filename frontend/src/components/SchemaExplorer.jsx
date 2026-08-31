@@ -307,11 +307,8 @@ function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlE
     }
   }, [isExpanded, databases.length, loadDatabases, error]);
 
-    useEffect(() => {
-      if (isExpanded && refreshCounter > 0) {
-        loadDatabases();
-      }
-    }, [refreshCounter, isExpanded, loadDatabases]);
+    // Do not reload connection databases on refreshCounter to prevent unmounting DatabaseNodes
+    // Only DatabaseNode should reload its schema (tables and row counts)
 
   const handleDumpDatabase = async (e) => {
     e.stopPropagation();
@@ -426,6 +423,15 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
   const [refreshCounter, setRefreshCounter] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   
+  useEffect(() => {
+      window.__triggerSchemaRefresh = () => {
+        setRefreshCounter(c => c + 1);
+      };
+      return () => {
+        if (window.__triggerSchemaRefresh) delete window.__triggerSchemaRefresh;
+      };
+    }, []);
+
   const activeConnection = connections.find(c => c.connectionToken === activeToken) || connections[0];
 
   return <main className="workspace">
@@ -621,6 +627,17 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
       </Suspense>
     </section>
       {createTableDb && <CreateTableModal database={createTableDb} onClose={() => setCreateTableDb(null)} onCreated={() => { setCreateTableDb(null); setTimeout(() => setRefreshCounter(c => c + 1), 500); }} />}
-      {mockDataTable && <MockDataModal database={mockDataTable.database} tableName={mockDataTable.table} connectionToken={activeConnection.connectionToken} onClose={() => setMockDataTable(null)} onGenerated={() => setMockDataTable(null)} />}
+      {mockDataTable && (
+        <MockDataModal
+            database={mockDataTable.database}
+            tableName={mockDataTable.table}
+            connectionToken={activeConnection.connectionToken}
+            onClose={() => setMockDataTable(null)}
+            onGenerated={() => {
+                setMockDataTable(null);
+                setTimeout(() => setRefreshCounter(c => c + 1), 500);
+            }}
+        />
+      )}
     </main>;
 }

@@ -201,7 +201,7 @@ public class SchemaService {
                             // Get real count
                             if (!"VIEW".equals(type)) {
                                 try (java.sql.Statement st = conn.createStatement();
-                                     java.sql.ResultSet countRs = st.executeQuery("SELECT COUNT(*) FROM " + databaseName + "." + name + "")) {
+                                     java.sql.ResultSet countRs = st.executeQuery("SELECT COUNT(*) FROM "+ databaseName + "." + name + "")) {
                                      if (countRs.next()) rows = countRs.getInt(1);
                                 } catch (Exception ignored) {}
                             }
