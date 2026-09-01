@@ -12,7 +12,12 @@ import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
+import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import java.util.Map;
 import java.util.UUID;
 import com.mongodb.client.MongoClient;
@@ -23,11 +28,93 @@ import java.util.HashMap;
 @Service
 public class QueryService {
 
+    private final ConcurrentHashMap<String, Statement> activeStatements = new ConcurrentHashMap<>();
+    
+    public void cancelQuery(String queryId) {
+        Statement st = activeStatements.remove(queryId);
+        if (st != null) {
+            try {
+                st.cancel();
+            } catch (SQLException ignored) {}
+        }
+    }
+
+
     private static final int MAX_ROWS = 1_000;
     private final JdbcTemplate db;
 
     public QueryService(JdbcTemplate db) {
         this.db = db;
+    }
+
+    
+    public int deleteRow(java.sql.Connection connection, String role, com.sqleditor.model.QueryUpdateReq req) throws java.sql.SQLException {
+        checkRolePermissions(role, "DELETE");
+        if (req.getTableName() == null || req.getTableName().isEmpty()) {
+            throw new java.sql.SQLException("Tablo ad tespit edilemedi.");
+        }
+
+        String fullTableName = req.getTableName();
+        String catalog = connection.getCatalog();
+        String schema = null;
+        String pureTableName = fullTableName;
+        if (fullTableName.contains(".")) {
+            String[] parts = fullTableName.split("\\.");
+            if (parts.length == 2) {
+                catalog = parts[0];
+                pureTableName = parts[1];
+            } else if (parts.length == 3) {
+                catalog = parts[0];
+                schema = parts[1];
+                pureTableName = parts[2];
+            }
+        }
+
+        java.util.List<String> pkColumns = new java.util.ArrayList<>();
+        try (java.sql.ResultSet pkRs = connection.getMetaData().getPrimaryKeys(catalog, schema, pureTableName)) {
+            while (pkRs.next()) {
+                pkColumns.add(pkRs.getString("COLUMN_NAME"));
+            }
+        }
+
+        java.util.List<String> whereCols = pkColumns.isEmpty() ? new java.util.ArrayList<>(req.getOldRowValues().keySet()) : pkColumns;
+        StringBuilder sql = new StringBuilder("DELETE FROM ");
+        String[] parts = fullTableName.split("\\.");
+        for (int i = 0; i < parts.length; i++) {
+            sql.append("`").append(parts[i].replace("`", "``")).append("`");
+            if (i < parts.length - 1) sql.append(".");
+        }
+        sql.append(" WHERE ");
+
+        java.util.List<Object> params = new java.util.ArrayList<>();
+        boolean first = true;
+        for (String colName : whereCols) {
+            String strVal = req.getOldRowValues().get(colName);
+            if (!first) sql.append(" AND ");
+            sql.append("`").append(colName.replace("`", "``")).append("` ");
+            if (strVal == null) {
+                sql.append("IS NULL");
+            } else {
+                sql.append("= ?");
+                Object paramVal = strVal;
+                if (pkColumns.isEmpty()) {
+                    if ("true".equalsIgnoreCase(strVal)) paramVal = 1;
+                    else if ("false".equalsIgnoreCase(strVal)) paramVal = 0;
+                }
+                params.add(paramVal);
+            }
+            first = false;
+        }
+        sql.append(" LIMIT 1");
+
+        try (java.sql.PreparedStatement ps = connection.prepareStatement(sql.toString())) {
+            for (int i = 0; i < params.size(); i++) {
+                ps.setObject(i + 1, params.get(i));
+            }
+            int updated = ps.executeUpdate();
+            if (updated == 0) throw new java.sql.SQLException("Hibir kayt eletiirilemedi. Veri deimi olabilir veya key uyumsuzlugu.");
+            return updated;
+        }
     }
 
     public int updateCell(Connection connection, String role, com.sqleditor.model.QueryUpdateReq req)
@@ -114,6 +201,180 @@ public class QueryService {
         }
     }
 
+    public StreamingResponseBody executeStream(
+            java.sql.Connection connection, String dbType, String sql, String queryId, String role, String userId, 
+            String connectionId, List<Map<String, String>> filters, List<Map<String, Object>> sorts, 
+            Integer limit, Integer offset, Boolean includeCount) throws java.sql.SQLException {
+        
+        String wrappedSql = sql.trim();
+        if (wrappedSql.endsWith(";")) {
+            wrappedSql = wrappedSql.substring(0, wrappedSql.length() - 1);
+        }
+        
+        String upperSql = wrappedSql.toUpperCase();
+        boolean isSelect = upperSql.startsWith("SELECT") || upperSql.startsWith("WITH");
+        
+        boolean needsWrapper = isSelect && ((filters != null && !filters.isEmpty()) || (sorts != null && !sorts.isEmpty()) || limit != null || offset != null);
+        if (needsWrapper) {
+            StringBuilder sb = new StringBuilder("SELECT * FROM ( ");
+            sb.append(wrappedSql).append(" ) AS t");
+            
+            if (filters != null && !filters.isEmpty()) {
+                sb.append(" WHERE 1=1 ");
+                for (Map<String, String> f : filters) {
+                    String col = f.get("id");
+                    String val = f.get("value");
+                    String type = f.get("type");
+                    if (col != null && val != null) {
+                        String op = "LIKE";
+                        String prefix = "%";
+                        String suffix = "%";
+                        
+                        if ("equals".equalsIgnoreCase(type)) {
+                            op = "="; prefix = ""; suffix = "";
+                        } else if ("notEqual".equalsIgnoreCase(type)) {
+                            op = "!="; prefix = ""; suffix = "";
+                        } else if ("greaterThan".equalsIgnoreCase(type)) {
+                            op = ">"; prefix = ""; suffix = "";
+                        } else if ("greaterThanOrEqual".equalsIgnoreCase(type)) {
+                            op = ">="; prefix = ""; suffix = "";
+                        } else if ("lessThan".equalsIgnoreCase(type)) {
+                            op = "<"; prefix = ""; suffix = "";
+                        } else if ("lessThanOrEqual".equalsIgnoreCase(type)) {
+                            op = "<="; prefix = ""; suffix = "";
+                        } else if ("startsWith".equalsIgnoreCase(type)) {
+                            op = "LIKE"; prefix = ""; suffix = "%";
+                        } else if ("endsWith".equalsIgnoreCase(type)) {
+                            op = "LIKE"; prefix = "%"; suffix = "";
+                        }
+                        
+                        sb.append(" AND `").append(col.replace("`", "``")).append("` ").append(op)
+                          .append(" '").append(prefix).append(val.replace("'", "''")).append(suffix).append("'");
+                    }
+                }
+            }
+            
+            if (sorts != null && !sorts.isEmpty()) {
+                sb.append(" ORDER BY ");
+                boolean first = true;
+                for (Map<String, Object> s : sorts) {
+                    if (!first) sb.append(", ");
+                    String col = (String) s.get("id");
+                    boolean desc = Boolean.parseBoolean(String.valueOf(s.get("desc")));
+                    sb.append("`").append(col.replace("`", "``")).append("` ").append(desc ? "DESC" : "ASC");
+                    first = false;
+                }
+            }
+            
+            if (limit != null) {
+                sb.append(" LIMIT ").append(limit);
+            }
+            if (offset != null) {
+                sb.append(" OFFSET ").append(offset);
+            }
+            wrappedSql = sb.toString();
+        }
+
+        final String finalSql = wrappedSql;
+        
+        return outputStream -> {
+            try (Statement statement = connection.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY)) {
+                if (queryId != null) activeStatements.put(queryId, statement);
+                
+                try {
+                    statement.setFetchSize(1000);
+                } catch (java.sql.SQLException e) {
+                    // ignore
+                }
+                
+                Long totalCount = null;
+                if (Boolean.TRUE.equals(includeCount) && isSelect) {
+                    String countSql = finalSql;
+                    if (countSql.toUpperCase().contains(" LIMIT ")) {
+                        countSql = countSql.substring(0, countSql.toUpperCase().lastIndexOf(" LIMIT "));
+                    }
+                    if (countSql.toUpperCase().contains(" ORDER BY ")) {
+                        countSql = countSql.substring(0, countSql.toUpperCase().lastIndexOf(" ORDER BY "));
+                    }
+                    countSql = "SELECT COUNT(*) FROM (" + countSql + ") AS count_t";
+                    try (Statement countStmt = connection.createStatement()) {
+                        try (java.sql.ResultSet countRs = countStmt.executeQuery(countSql)) {
+                            if (countRs.next()) {
+                                totalCount = countRs.getLong(1);
+                            }
+                        }
+                    } catch(Exception ignored) {
+                        ignored.printStackTrace();
+                    }
+                }
+
+                boolean hasResultSet = statement.execute(finalSql);
+                if (!hasResultSet) {
+                    int count = statement.getUpdateCount();
+                    String msg = "{\"__meta\": [\"message\"]}\n{\"message\": \"" + count + " rows affected\"}\n";
+                    outputStream.write(msg.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    outputStream.flush();
+                    return;
+                }
+                
+                try (java.sql.ResultSet rs = statement.getResultSet()) {
+
+
+                    java.sql.ResultSetMetaData metaData = rs.getMetaData();
+                    int columnCount = metaData.getColumnCount();
+                    List<String> cols = new ArrayList<>();
+                    String detectedTable = null;
+                    
+                    for (int i = 1; i <= columnCount; i++) {
+                        cols.add(metaData.getColumnLabel(i));
+                        if (detectedTable == null || detectedTable.isEmpty()) {
+                            String cat = metaData.getCatalogName(i);
+                            String sch = metaData.getSchemaName(i);
+                            String tab = metaData.getTableName(i);
+                            if (tab != null && !tab.isEmpty()) {
+                                if (sch != null && !sch.isEmpty()) detectedTable = sch + "." + tab;
+                                else if (cat != null && !cat.isEmpty()) detectedTable = cat + "." + tab;
+                                else detectedTable = tab;
+                            }
+                        }
+                    }
+                    
+                    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                    java.util.Map<String, Object> metaRow = new java.util.HashMap<>();
+                    metaRow.put("__meta", cols);
+                    if (detectedTable != null) metaRow.put("__tableName", detectedTable);
+                    if (totalCount != null) metaRow.put("__totalCount", totalCount);
+                    outputStream.write((mapper.writeValueAsString(metaRow) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    outputStream.flush();
+                    
+                    int count = 0;
+                    while (rs.next()) {
+                        java.util.Map<String, Object> row = new java.util.HashMap<>();
+                        for (int i = 1; i <= columnCount; i++) {
+                            row.put(cols.get(i - 1), formatValue(rs.getObject(i)));
+                        }
+                        outputStream.write((mapper.writeValueAsString(row) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                        count++;
+                        if (count % 5000 == 0) {
+                            outputStream.flush();
+                        }
+                    }
+                    outputStream.flush();
+                }
+            } catch (java.sql.SQLException e) {
+                String err = "{\"__error\": \"" + e.getMessage().replace("\"", "\\\"").replace("\n", " ") + "\"}\n";
+                try {
+                    outputStream.write(err.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    outputStream.flush();
+                } catch (java.io.IOException ioe) {}
+            } finally {
+                if (queryId != null) activeStatements.remove(queryId);
+                // connection should not be closed as it's cached
+            }
+        };
+    }
+
+
     public QueryResponse execute(Connection connection, String sql, String role, String userId, String connectionId)
             throws SQLException {
         checkRolePermissions(role, sql);
@@ -122,7 +383,7 @@ public class QueryService {
         String errorMsg = null;
         try (Statement statement = connection.createStatement()) {
             statement.setQueryTimeout(30);
-            statement.setMaxRows(MAX_ROWS + 1);
+            // statement.setMaxRows(MAX_ROWS + 1);
 
             boolean hasResultSet = statement.execute(sql);
             long elapsed = System.currentTimeMillis() - start;
@@ -158,12 +419,10 @@ public class QueryService {
                 List<List<String>> rows = new ArrayList<>();
                 boolean truncated = false;
                 while (resultSet.next()) {
-                    if (rows.size() == MAX_ROWS) {
-
-                    truncated = true;
-
-                    break;
-                    }
+                    /*if (rows.size() == MAX_ROWS) {
+                        truncated = true;
+                        break;
+                    }*/
                     List<String> row = new ArrayList<>();
                     for (int index = 1; index <= columnCount; index++) {
                         row.add(formatValue(resultSet.getObject(index)));
@@ -313,7 +572,7 @@ public class QueryService {
                 filter = new Document();
 
             List<Document> docs = new ArrayList<>();
-            mdb.getCollection(collection).find(filter).limit(MAX_ROWS).into(docs);
+            mdb.getCollection(collection).find(filter).into(docs);
 
             List<List<String>> rows = new ArrayList<>();
             List<String> columns = new ArrayList<>();

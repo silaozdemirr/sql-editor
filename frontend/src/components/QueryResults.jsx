@@ -1,6 +1,8 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { FiAlertCircle, FiCheckCircle, FiDatabase, FiClock, FiInfo, FiDownload, FiPlus, FiMinus, FiPieChart } from 'react-icons/fi';
-import { getQueryHistory, updateCell, executeQuery } from '../api/queryApi';
+import { FiAlertCircle, FiCheckCircle, FiDatabase, FiClock, FiInfo, FiDownload, FiPlus, FiMinus, FiPieChart, FiUpload } from 'react-icons/fi';
+import { getQueryHistory, updateCell, executeQuery, deleteRow } from '../api/queryApi';
+import AddRowModal from './AddRowModal';
+import ImportDataModal from './ImportDataModal';
 import { AgGridReact } from 'ag-grid-react';
 import { AllCommunityModule, ModuleRegistry } from 'ag-grid-community';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -72,28 +74,73 @@ const ChartRenderer = ({ data, columns }) => {
   );
 };
 
-const formatDataForGrid = (data, isEditable = false) => {
-  if (!data || !data.columns || !data.rows) return { rowData: [], colDefs: [] };
-  const colDefs = data.columns.map((col) => ({ 
-    field: col, 
-    headerName: col,
-    editable: isEditable,
-    valueFormatter: (params) => params.value === null ? 'NULL' : params.value,
-    cellClass: (params) => params.value === null ? 'null-value' : (isEditable ? 'editable-cell' : ''),
-    comparator: (valueA, valueB) => {
-      if (valueA === null && valueB === null) return 0;
-      if (valueA === null) return -1;
-      if (valueB === null) return 1;
-      const numA = Number(valueA);
-      const numB = Number(valueB);
-      if (!isNaN(numA) && !isNaN(numB) && valueA !== '' && valueB !== '') {
-         return numA - numB;
-      }
-      return String(valueA).localeCompare(String(valueB));
-    }
-  }));
+export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken, userRole, onFilterSortChange, paginationInfo, onPaginationChange }) {
+
+
+  const [activeTab, setActiveTab] = useState('results');
+  const [history, setHistory] = useState(null);
+  const [historyError, setHistoryError] = useState('');
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+
+  const [expandedGroups, setExpandedGroups] = useState({});
+  const [isLightMode, setIsLightMode] = useState(() => document.body.classList.contains('light-mode'));
+  const gridRef = useRef();
+
+  const onSortChanged = (e) => {
+      if (!onFilterSortChange) return;
+      const columnState = e.api.getColumnState();
+      const sortModel = columnState.filter(s => s.sort).map(s => ({ colId: s.colId, sort: s.sort }));
+      const sorts = sortModel.map(s => ({ id: s.colId, desc: s.sort === 'desc' }));
+      
+      const filterModel = e.api.getFilterModel();
+      const filters = Object.keys(filterModel).map(key => ({ id: key, value: filterModel[key].filter, type: filterModel[key].type }));
+      
+      onFilterSortChange(filters, sorts);
+  };
+
+  const onFilterChanged = (e) => {
+      if (!onFilterSortChange) return;
+      const columnState = e.api.getColumnState();
+      const sortModel = columnState.filter(s => s.sort).map(s => ({ colId: s.colId, sort: s.sort }));
+      const sorts = sortModel.map(s => ({ id: s.colId, desc: s.sort === 'desc' }));
+      
+      const filterModel = e.api.getFilterModel();
+      const filters = Object.keys(filterModel).map(key => ({ id: key, value: filterModel[key].filter, type: filterModel[key].type }));
+      
+      onFilterSortChange(filters, sorts);
+  };
+
   
-  colDefs.unshift({
+  useEffect(() => {
+    const handleThemeChange = () => setIsLightMode(document.body.classList.contains('light-mode'));
+    window.addEventListener('themeChanged', handleThemeChange);
+    return () => window.removeEventListener('themeChanged', handleThemeChange);
+  }, []);
+
+  const hasRows = result?.columns?.length > 0;
+  
+  const resultColDefs = useMemo(() => {
+    if (!result?.columns) return [];
+    const isEditable = userRole !== "READ_ONLY" && !!result?.tableName;
+    const cols = result.columns.map((col) => ({ 
+      field: col, 
+      headerName: col,
+      editable: isEditable,
+      valueFormatter: (params) => params.value === null ? 'NULL' : params.value,
+      cellClass: (params) => params.value === null ? 'null-value' : (isEditable ? 'editable-cell' : ''),
+      comparator: (valueA, valueB) => {
+        if (valueA === null && valueB === null) return 0;
+        if (valueA === null) return -1;
+        if (valueB === null) return 1;
+        const numA = Number(valueA);
+        const numB = Number(valueB);
+        if (!isNaN(numA) && !isNaN(numB) && valueA !== '' && valueB !== '') return numA - numB;
+        return String(valueA).localeCompare(String(valueB));
+      }
+    }));
+
+    cols.unshift({
       headerName: '#',
       valueGetter: 'node.rowIndex + 1',
       width: 70,
@@ -104,36 +151,37 @@ const formatDataForGrid = (data, isEditable = false) => {
       filter: false,
       sortable: false,
       resizable: false
-  });
-
-  const rowData = data.rows.map((row) => {
-    const obj = {};
-    data.columns.forEach((col, i) => {
-      obj[col] = row[i];
     });
-    return obj;
-  });
-  return { rowData, colDefs };
-};
+    return cols;
+  }, [result?.columns, result?.tableName, userRole]);
 
-export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken, userRole }) {
-  const [activeTab, setActiveTab] = useState('results');
-  const [history, setHistory] = useState(null);
-  const [historyError, setHistoryError] = useState('');
-  const [expandedGroups, setExpandedGroups] = useState({});
-  const [isLightMode, setIsLightMode] = useState(() => document.body.classList.contains('light-mode'));
-  const gridRef = useRef();
-  
-  useEffect(() => {
-    const handleThemeChange = () => setIsLightMode(document.body.classList.contains('light-mode'));
-    window.addEventListener('themeChanged', handleThemeChange);
-    return () => window.removeEventListener('themeChanged', handleThemeChange);
-  }, []);
+  const resultRowData = result?.rows || [];
 
-  const hasRows = result?.columns?.length > 0;
-  
-  const { rowData: resultRowData, colDefs: resultColDefs } = useMemo(() => formatDataForGrid(result, userRole !== "READ_ONLY" && !!result?.tableName), [result, userRole]);
-  const { rowData: explainRowData, colDefs: explainColDefs } = useMemo(() => formatDataForGrid(explainResult, false), [explainResult]);
+  const explainColDefs = useMemo(() => {
+    if (!explainResult?.columns) return [];
+    const cols = explainResult.columns.map((col) => ({ 
+      field: col, 
+      headerName: col,
+      editable: false,
+      valueFormatter: (params) => params.value === null ? 'NULL' : params.value,
+    }));
+
+    cols.unshift({
+      headerName: '#',
+      valueGetter: 'node.rowIndex + 1',
+      width: 70,
+      minWidth: 70,
+      maxWidth: 70,
+      pinned: 'left',
+      suppressMenu: true,
+      filter: false,
+      sortable: false,
+      resizable: false
+    });
+    return cols;
+  }, [explainResult?.columns]);
+
+  const explainRowData = explainResult?.rows || [];
 
   const handleCellValueChanged = async (params) => {
     if (!result?.tableName) return;
@@ -157,6 +205,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
         const sql = `INSERT INTO \`${result.tableName}\` (${columns.join(', ')}) VALUES (${values.join(', ')})`;
         await executeQuery(connectionToken, sql);
         data._isNewRow = false;
+        window.__triggerSchemaRefresh?.();
         alert('Yeni satır başarıyla eklendi! Tüm verileri ve otomatik oluşan ID leri görmek için sorguyu yeniden çalıştırın.');
       } catch (err) {
         alert('Satır eklenirken hata: ' + (err.response?.data?.message || 'Zorunlu alanları doldurun.'));
@@ -179,7 +228,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
 
   const handleAddRow = () => {
     if (!result?.tableName) return;
-    gridRef.current.api.applyTransaction({ add: [{ _isNewRow: true }] });
+    setShowAddModal(true);
   };
 
   const handleDeleteRow = async () => {
@@ -192,20 +241,10 @@ export default function QueryResults({ result, error, explainResult, explainErro
     const data = selectedNodes[0].data;
     if (!window.confirm('Seçili satırı silmek istediğinize emin misiniz?')) return;
     
-    const conditions = [];
-    result.columns.forEach(col => {
-      const val = data[col];
-      if (val === null || val === undefined) {
-        conditions.push(`\`${col}\` IS NULL`);
-      } else {
-        conditions.push(`\`${col}\` = '${String(val).replace(/'/g, "''")}'`);
-      }
-    });
-    
-    const sql = `DELETE FROM \`${result.tableName}\` WHERE ${conditions.join(' AND ')} LIMIT 1`;
     try {
-      await executeQuery(connectionToken, sql);
+      await deleteRow(result.tableName, data, connectionToken);
       gridRef.current.api.applyTransaction({ remove: [data] });
+      window.__triggerSchemaRefresh?.();
     } catch (err) {
       alert(err.response?.data?.message || 'Satır silinemedi.');
     }
@@ -303,6 +342,11 @@ export default function QueryResults({ result, error, explainResult, explainErro
                 </button>
               </>
             )}
+            {result?.tableName && userRole !== 'READ_ONLY' && (
+              <button type="button" onClick={() => setShowImportModal(true)} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(59, 130, 246, 0.1)', border: '1px solid rgba(59, 130, 246, 0.25)', color: '#3b82f6', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Excel veya CSV dosyasından veri aktar">
+                <FiUpload size={13} />İçe Aktar
+              </button>
+            )}
             <button type="button" onClick={exportToCsv} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="CSV olarak kaydet">
               <FiDownload size={13} />CSV
             </button>
@@ -347,23 +391,55 @@ export default function QueryResults({ result, error, explainResult, explainErro
           )}
           {!isRunning && !error && !result && <div className="results-state">Sorgu sonucunuz burada tablo olarak görüntülenecek.</div>}
           {!isRunning && !error && result && !hasRows && <div className="results-state result-success"><FiCheckCircle /> {result.message}</div>}
-          {!isRunning && !error && hasRows && <div className={`results-table-wrap ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
-            <AgGridReact 
-              ref={gridRef}
-              theme="legacy"
-              rowData={resultRowData} 
-              columnDefs={resultColDefs} 
-              defaultColDef={defaultColDef} 
-              pagination={true} 
-              paginationPageSize={50}
-              paginationPageSizeSelector={[20, 50, 100, 500]}
-              rowHeight={35}
-              headerHeight={40}
-              rowSelection="single"
-              onCellValueChanged={handleCellValueChanged}
-              style={{ flex: 1, width: '100%', height: '100%' }}
-            />
-          </div>}
+          {!isRunning && !error && hasRows && (
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div className={`results-table-wrap ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
+                <AgGridReact 
+                    ref={gridRef}
+                    theme="legacy"
+                    rowData={resultRowData} 
+                    columnDefs={resultColDefs} 
+                    defaultColDef={defaultColDef} 
+                    rowModelType="clientSide"
+                    pagination={false}
+                    rowHeight={35}
+                    headerHeight={40}
+                    rowSelection="single"
+                    onCellValueChanged={handleCellValueChanged}
+                    onSortChanged={onSortChanged}
+                    onFilterChanged={onFilterChanged}
+                    style={{ flex: 1, width: '100%', height: '100%' }}
+                  />
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px', background: 'var(--bg-layer-2)', borderTop: '1px solid var(--border-subtle)', gap: '16px', fontSize: '13px' }}>
+                 {paginationInfo && (
+                   <>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                       <span>Page Size:</span>
+                       <select 
+                          value={paginationInfo.limit} 
+                          onChange={(e) => onPaginationChange(0, parseInt(e.target.value, 10))}
+                          style={{ padding: '4px', borderRadius: '4px', border: '1px solid var(--border-muted)', background: 'var(--bg-card)', color: 'var(--text-primary)' }}
+                       >
+                         <option value={50}>50</option>
+                         <option value={100}>100</option>
+                         <option value={200}>200</option>
+                         <option value={500}>500</option>
+                       </select>
+                     </div>
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                       <button onClick={() => onPaginationChange(0, paginationInfo.limit)} disabled={paginationInfo.offset === 0} style={{ padding: '4px 8px', cursor: paginationInfo.offset === 0 ? 'not-allowed' : 'pointer' }}>|&lt;</button>
+                       <button onClick={() => onPaginationChange(Math.max(0, paginationInfo.offset - paginationInfo.limit), paginationInfo.limit)} disabled={paginationInfo.offset === 0} style={{ padding: '4px 8px', cursor: paginationInfo.offset === 0 ? 'not-allowed' : 'pointer' }}>&lt;</button>
+                       <span>{paginationInfo.offset + 1} - {paginationInfo.offset + (result?.rows?.length || 0)} {paginationInfo.totalCount !== null ? `of ${paginationInfo.totalCount}` : ''}</span>
+                       <button onClick={() => onPaginationChange(paginationInfo.offset + paginationInfo.limit, paginationInfo.limit)} disabled={paginationInfo.totalCount !== null && paginationInfo.offset + paginationInfo.limit >= paginationInfo.totalCount} style={{ padding: '4px 8px', cursor: (paginationInfo.totalCount !== null && paginationInfo.offset + paginationInfo.limit >= paginationInfo.totalCount) ? 'not-allowed' : 'pointer' }}>&gt;</button>
+                       <button onClick={() => { if (paginationInfo.totalCount) { const lastPageOffset = Math.floor((paginationInfo.totalCount - 1) / paginationInfo.limit) * paginationInfo.limit; onPaginationChange(lastPageOffset, paginationInfo.limit); } }} disabled={paginationInfo.totalCount == null || paginationInfo.offset + paginationInfo.limit >= paginationInfo.totalCount} style={{ padding: '4px 8px', cursor: (paginationInfo.totalCount == null || paginationInfo.offset + paginationInfo.limit >= paginationInfo.totalCount) ? 'not-allowed' : 'pointer' }}>&gt;|</button>
+                     </div>
+                   </>
+                 )}
+                 <div style={{ color: 'var(--text-muted)' }}>{result?.rows?.length} row(s) fetched</div>
+              </div>
+            </div>
+          )}
         </>
       )}
       {activeTab === 'history' && (
@@ -437,5 +513,29 @@ export default function QueryResults({ result, error, explainResult, explainErro
         </div>
       )}
     </div>
-  </section>;
+        {showAddModal && (
+          <AddRowModal
+            tableName={result.tableName}
+            columns={result.columns}
+            connectionToken={connectionToken}
+            onClose={() => setShowAddModal(false)}
+            onAdded={() => {
+              setShowAddModal(false);
+              alert('Yeni satır başarıyla eklendi! En son eklenen satırı görmek için sorguyu (F5) veya tabloyu yenileyin.');
+            }}
+          />
+        )}
+        {showImportModal && (
+          <ImportDataModal
+            tableName={result.tableName}
+            columns={result.columns}
+            connectionToken={connectionToken}
+            onClose={() => setShowImportModal(false)}
+            onImported={() => {
+              setShowImportModal(false);
+              alert('İçe aktarma işlemi başarıyla tamamlandı!');
+            }}
+          />
+        )}
+    </section>;
 }

@@ -8,6 +8,8 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.server.ResponseStatusException;
 
 import com.sqleditor.model.QueryUpdateReq;
@@ -19,6 +21,35 @@ import java.sql.SQLException;
 @RequestMapping("/api/query")
 @CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
 public class QueryController {
+    @PostMapping("/executeStream")
+    public org.springframework.http.ResponseEntity<StreamingResponseBody> executeStream(
+            @RequestHeader("X-Connection-Token") String token,
+            @RequestBody QueryRequest request,
+            org.springframework.security.core.Authentication auth) throws java.sql.SQLException {
+        
+        String role = "READ_ONLY";
+        if (auth != null && auth.getAuthorities() != null) {
+            role = auth.getAuthorities().stream().findFirst().map(org.springframework.security.core.GrantedAuthority::getAuthority).orElse("ROLE_READ_ONLY").replace("ROLE_", "");
+        }
+        
+        String userId = auth != null ? auth.getName() : "anonymous";
+        String dbType = sessions.getDbType(userId, token);
+        java.sql.Connection connection = sessions.get(userId, token);
+        
+        StreamingResponseBody stream = queryService.executeStream(
+                connection, dbType, request.getSql(), request.getQueryId(), role, userId, token,
+                request.getFilters(), request.getSorts(), request.getLimit(), request.getOffset(), request.getIncludeCount());
+                
+        return org.springframework.http.ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.APPLICATION_NDJSON)
+                .body(stream);
+    }
+
+    @PostMapping("/cancel/{queryId}")
+    public void cancelQuery(@PathVariable String queryId) {
+        queryService.cancelQuery(queryId);
+    }
+
 
     private final QueryService queryService;
     private final ConnectionSessionService sessions;
@@ -80,6 +111,25 @@ public class QueryController {
         }
     }
 
+    @PostMapping("/delete")
+    public ResponseEntity<java.util.Map<String, String>> deleteRow(@RequestBody com.sqleditor.model.QueryUpdateReq req,
+                                                                    @RequestHeader("X-Connection-Token") String token,
+                                                                    org.springframework.security.core.Authentication auth) {
+        try {
+            String dbType = sessions.getDbType(auth.getName(), token);
+            if (isNoSql(dbType)) {
+                throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Silme ilemi NoSQL veritabanlar iin desteklenmemektedir.");
+            }
+            try (java.sql.Connection connection = sessions.get(auth.getName(), token)) {
+                String role = auth.getAuthorities().iterator().next().getAuthority();
+                int deleted = queryService.deleteRow(connection, role, req);
+                return ResponseEntity.ok(java.util.Map.of("message", deleted + " kayt silindi."));
+            }
+        } catch (java.sql.SQLException exception) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST, "Silme baarsz: " + exception.getMessage(), exception);
+        }
+    }
+
     @PostMapping("/update")
     public ResponseEntity<java.util.Map<String, String>> updateCell(@RequestBody QueryUpdateReq req,
                                                                     @RequestHeader("X-Connection-Token") String token,
@@ -95,7 +145,7 @@ public class QueryController {
                 int updated = queryService.updateCell(connection, role, req);
                 return ResponseEntity.ok(java.util.Map.of("message", updated + " kayıt güncellendi."));
             }
-        } catch (SQLException exception) {
+        } catch (java.sql.SQLException exception) { exception.printStackTrace();
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Düzenleme başarısız: " + exception.getMessage(), exception);
         }
     }
@@ -166,7 +216,7 @@ public class QueryController {
                 }
                 return ResponseEntity.ok().build();
             }
-        } catch (SQLException exception) {
+        } catch (java.sql.SQLException exception) { exception.printStackTrace();
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "İşlem başarısız: " + exception.getMessage(), exception);
         }
     }

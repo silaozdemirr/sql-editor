@@ -29,7 +29,7 @@ function AuthPanel({ onAuthenticated, toggleTheme, isLightMode }) {
           </div>
         </section>
       </main>
-      <button onClick={toggleTheme} style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-md)' }} title={isLightMode ? "Karanlık Tema" : "Aydınlık Tema"}>
+      <button onClick={toggleTheme} style={{ position: 'fixed', bottom: '70px', right: '20px', zIndex: 9999, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-md)' }} title={isLightMode ? "Karanlık Tema" : "Aydınlık Tema"}>
         {isLightMode ? <span style={{fontSize:'18px'}}>🌙</span> : <span style={{fontSize:'18px'}}>☀️</span>}
       </button>
     </>
@@ -206,13 +206,13 @@ function App() {
       {showAddConnection && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', zIndex: 99999, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto' }}>
           <div style={{ position: 'relative', width: '100%', maxWidth: '900px', margin: 'auto' }}>
-            <button onClick={() => setShowAddConnection(false)} style={{ position: 'absolute', top: '15px', right: '15px', background: 'var(--bg-layer-2)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>X</button>
+            <button onClick={() => setShowAddConnection(false)} style={{ position: 'absolute', bottom: '70px', right: '20px', background: 'var(--bg-layer-2)', border: '1px solid var(--border-subtle)', color: 'var(--text-primary)', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>X</button>
             <ConnectionPanel onConnected={handleConnected} onLogout={handleLogout} />
           </div>
         </div>
       )}
 
-      <button onClick={toggleTheme} style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 9999, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-md)' }} title={isLightMode ? "Karanlık Tema" : "Aydınlık Tema"}>
+      <button onClick={toggleTheme} style={{ position: 'fixed', bottom: '70px', right: '20px', zIndex: 9999, background: 'var(--bg-card)', color: 'var(--text-primary)', border: '1px solid var(--border-subtle)', borderRadius: '50%', width: '40px', height: '40px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', boxShadow: 'var(--shadow-md)' }} title={isLightMode ? "Karanlık Tema" : "Aydınlık Tema"}>
         {isLightMode ? <span style={{fontSize:'18px'}}>🌙</span> : <span style={{fontSize:'18px'}}>☀️</span>}
       </button>
     </div>

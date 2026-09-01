@@ -2,9 +2,9 @@ import React, { useCallback, useState, useEffect, useRef, forwardRef, useImperat
 import CodeMirror from '@uiw/react-codemirror';
 import { sql, MySQL, PostgreSQL, MSSQL, SQLite, MariaSQL, PLSQL, StandardSQL } from '@codemirror/lang-sql';
 import { oneDark } from '@codemirror/theme-one-dark';
-import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft, FiCpu, FiMessageSquare } from 'react-icons/fi';
+import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft, FiCpu, FiMessageSquare, FiUpload } from 'react-icons/fi';
 import { format } from 'sql-formatter';
-import { executeQuery, explainQuery, manageTransaction, generateSqlWithAi } from '../api/queryApi';
+import { executeQuery, explainQuery, manageTransaction, generateSqlWithAi, executeStreamQuery, cancelStreamQuery } from '../api/queryApi';
 import QueryResults from './QueryResults';
 
 const INITIAL_SQL = ``;
@@ -167,6 +167,25 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
 
   const editorRef = useRef(null);
 
+  const handleFilterSortChange = useCallback((filters, sorts) => {
+      const active = tabs.find(t => t.id === activeTabId);
+      if (active && active.isRunning) {
+          if (active.cancelFn) active.cancelFn();
+          if (active.queryId && connectionToken) {
+              cancelStreamQuery(connectionToken, active.queryId).catch(console.error);
+          }
+      }
+      updateTab(activeTabId, { filters, sorts, autoRunPending: true, isRunning: false });
+  }, [activeTabId, updateTab, tabs, connectionToken]);
+
+  useEffect(() => {
+    const active = tabs.find(t => t.id === activeTabId);
+    if (active && active.autoRunPending && !active.isRunning) {
+      updateTab(activeTabId, { autoRunPending: false });
+      runQuery();
+    }
+  }, [tabs, activeTabId, updateTab]); // removed runQuery to avoid circular deps temporarily
+
   const runQuery = useCallback(async () => {
     let queryToRun = activeTab.query;
     if (editorRef.current && editorRef.current.view) {
@@ -182,71 +201,98 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
       updateTab(activeTabId, { notice: 'Çalıştırmak için geçerli bir SQL sorgusu yazın veya seçin.' });
       return;
     }
-    updateTab(activeTabId, { isRunning: true, queryError: '', explainError: '' });
-    try {
-      const result = await executeQuery(connectionToken, executableSql);
-      
-      // Backend returns 200 OK with error message starting with "Sorgu hatası:" to prevent console spam
-      if (result && result.message && result.message.startsWith("Sorgu hatas")) {
-        let errorMsg = result.message;
-        const lowerErr = errorMsg.toLowerCase();
-        
-        if (lowerErr.includes("you have an error in your sql syntax") && executableSql.includes(";")) {
-           errorMsg += `\n\n💡 TIP: If you are running multiple queries at once and getting an error, please select the specific block or line with your mouse and run it individually (Ctrl + Enter).`;
-        }
-        
-        if (lowerErr.includes("no database selected")) {
-           if (executableSql.match(/(?:FROM|TABLE|INTO|UPDATE)\s+[a-zA-Z0-9_]+\s*(?:$|\s|;)/i)) {
-               errorMsg += `\n\n💡 TIP: You MUST specify the database name before the table name! Use the 'database_name.table_name' format (e.g. \`filmler_db.filmler\`).`;
-           } else if (executableSql.match(/[a-zA-Z0-9_]+\s*\(\s*['"]/)) {
-               errorMsg += `\n\n💡 TIP: MySQL thinks you are trying to call a function because of a SYNTAX ERROR. Did you forget an operator like '='? (e.g. writing \`name ('John')\` instead of \`name = ('John')\`).`;
-           } else {
-               errorMsg += `\n\n💡 TIP: MySQL doesn't know which database to use! You must prefix your tables with the database name (e.g. \`db_name.table_name\`). If you did, you might have a syntax error causing MySQL to look for a function.`;
-           }
-        }
-        
-        if (lowerErr.includes("function") && lowerErr.includes("does not exist")) {
-           errorMsg += `\n\n💡 TIP: Function does not exist! If you didn't mean to call a function, you probably forgot an operator like '=' (e.g. writing name ('John') makes MySQL think it's a function).`;
-        }
-        
-        if (lowerErr.includes("unknown column") && executableSql.includes('"')) {
-           errorMsg += `\n\n💡 TIP: 'Unknown column' error! You should always use SINGLE QUOTES (') for string values in SQL. Using double quotes (") makes MySQL think it is a column name.`;
-        }
+    
+    const newQueryId = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    updateTab(activeTabId, { 
+      isRunning: true, 
+      queryError: '', 
+      explainError: '', 
+      queryId: newQueryId,
+      queryResult: { columns: activeTab.queryResult?.columns || [], rows: [], message: 'Metadata aliniyor...', totalCount: activeTab.queryResult?.totalCount, tableName: activeTab.queryResult?.tableName, paginationInfo: activeTab.queryResult?.paginationInfo }
+    });
 
-        updateTab(activeTabId, { queryError: errorMsg, notice: 'Query failed.' });
-      } else {
-        updateTab(activeTabId, { queryResult: result, notice: `${result.executionTimeMs} ms içinde tamamlandı.` });
-          
-          const upperSql = executableSql.toUpperCase();
-          if (upperSql.includes("CREATE ") || upperSql.includes("DROP ") || upperSql.includes("ALTER ") || upperSql.includes("RENAME ") || upperSql.includes("TRUNCATE ")) {
-              if (onDdlExecuted) onDdlExecuted();
-          }
-      }
-      
-      try {
-        const expResult = await explainQuery(connectionToken, executableSql);
-        if (expResult && expResult.columns && expResult.columns.length > 0) {
-          updateTab(activeTabId, { explainResult: expResult });
-        } else {
-          updateTab(activeTabId, { explainError: expResult?.message || 'Açıklama alınamadı.' });
+    const chunkPayload = { 
+        sql: executableSql, 
+        queryId: newQueryId, 
+        filters: activeTab.filters || [], 
+        sorts: activeTab.sorts || [],
+        limit: activeTab.pageSize || 200,
+        offset: activeTab.pageOffset || 0,
+        includeCount: true
+    };
+
+    let currentCols = [];
+    let fetchedRows = [];
+    let errorMsg = '';
+    let isFirstMeta = true;
+    let totalCount = null;
+    let detectedTable = '';
+    let start = Date.now();
+    
+    try {
+        await executeStreamQuery(
+            connectionToken,
+            chunkPayload,
+            (chunks) => {
+                for (const chunk of chunks) {
+                    if (chunk.__meta) {
+                        if (isFirstMeta) {
+                            currentCols = chunk.__meta;
+                            if (chunk.__totalCount !== undefined) totalCount = parseInt(chunk.__totalCount, 10);
+                            if (chunk.__tableName !== undefined) detectedTable = chunk.__tableName;
+                            isFirstMeta = false;
+                        }
+                    } else if (chunk.__error) {
+                        errorMsg = chunk.__error;
+                    } else {
+                        if (currentCols.length > 0) {
+                            const rowObj = {};
+                            for(const col of currentCols) {
+                                rowObj[col] = chunk[col] !== undefined ? chunk[col] : null;
+                            }
+                            fetchedRows.push(rowObj);
+                        }
+                    }
+                }
+            },
+            () => {},
+            (err) => { errorMsg = err.message; }
+        );
+        
+        if (errorMsg) {
+            updateTab(activeTabId, { queryError: errorMsg, isRunning: false, notice: 'Sorgu hatayla tamamlandı.' });
+            return;
         }
-      } catch (expError) {
-        updateTab(activeTabId, { explainError: expError.response?.data?.message || 'Açıklama alınamadı.' });
-      }
+        
+        if (currentCols.length === 1 && currentCols[0] === 'message') {
+            window.__triggerSchemaRefresh?.();
+        }
+        
+        updateTab(activeTabId, {
+            isRunning: false,
+            notice: 'Sorgu başarıyla çalıştırıldı.',
+            queryResult: { columns: currentCols, rows: fetchedRows, tableName: detectedTable, totalCount: totalCount, executionTimeMs: Date.now() - start, paginationInfo: { limit: activeTab.pageSize || 200, offset: activeTab.pageOffset || 0, totalCount: totalCount } }
+        });
+        
     } catch (requestError) {
-        let message = requestError.response?.data?.message || requestError.message || 'Sorgu çalıştırılamadı.';
-        if (typeof message !== 'string') {
-          try { message = JSON.stringify(message); } catch (e) { message = String(message); }
+        let msg = requestError.response?.data?.message || requestError.message || 'Sorgu çalıştırılamadı.';
+        if (msg.toLowerCase().includes("you have an error in your sql syntax") && executableSql.includes(";")) {
+           msg += "\n\nİPUCU: Birden fazla sorguyu aynı anda çalıştırırken hata alıyorsanız, lütfen sorguları fareyle seçip tek tek çalıştırın.";
         }
-        // If it's a MySQL multiple query error, give a helpful tip
-        if (message.toLowerCase().includes("you have an error in your sql syntax") && executableSql.includes(";")) {
-           message += "\n\nİPUCU: Birden fazla sorguyu aynı anda çalıştırırken hata alıyorsanız, lütfen sorguları fareyle seçip tek tek (Ctrl + Enter) çalıştırın veya sadece çalıştırmak istediğiniz satırı seçin.";
-        }
-        updateTab(activeTabId, { queryError: message, notice: 'Sorgu hatayla tamamlandı.' });
-    } finally {
-      updateTab(activeTabId, { isRunning: false });
+        updateTab(activeTabId, { queryError: msg, isRunning: false, notice: 'Sorgu hatayla tamamlandı.' });
     }
-  }, [connectionToken, activeTab.query, activeTabId, updateTab]);
+  }, [connectionToken, activeTab.query, activeTab.filters, activeTab.sorts, activeTab.pageSize, activeTab.pageOffset, activeTabId, updateTab, activeTab.queryResult]);
+  
+  const cancelQuery = useCallback(() => {
+    if (activeTab.cancelFn) {
+        activeTab.cancelFn();
+    }
+    if (activeTab.queryId && connectionToken) {
+        cancelStreamQuery(connectionToken, activeTab.queryId).catch(console.error);
+    }
+    updateTab(activeTabId, { isRunning: false, notice: 'Sorgu iptal edildi.' });
+  }, [activeTab, activeTabId, connectionToken, updateTab]);
+
 
   const handleEditorKeydown = useCallback((event) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
@@ -262,10 +308,9 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
   useEffect(() => {
     if (connectionToken) {
       manageTransaction(connectionToken, autoCommit ? 'autocommit_on' : 'autocommit_off')
-        .then(() => updateTab(activeTabId, { notice: autoCommit ? 'Auto-Commit AÇIK' : 'Auto-Commit KAPALI.' }))
-        .catch(() => updateTab(activeTabId, { notice: 'Auto-Commit durumu değiştirilemedi.' }));
+        .catch(() => console.warn('Auto-Commit sync skipped.'));
     }
-  }, [autoCommit, connectionToken, activeTabId, updateTab]);
+  }, [autoCommit, connectionToken]);
 
   useEffect(() => {
     const active = tabs.find(t => t.id === activeTabId);
@@ -308,6 +353,22 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
     updateTab(activeTabId, { notice: `Betik '${name}' olarak kaydedildi.` });
   }, [activeTab.query, activeTabId, currentDatabase, updateTab]);
 
+  const handleLoadSql = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const text = evt.target.result;
+      const id = Date.now();
+      setTabs(prev => [...prev, {
+        id, title: file.name, query: text, notice: '', isRunning: false, queryResult: null, queryError: '', explainResult: null, explainError: '', filters: [], sorts: [], pageSize: 200, pageOffset: 0, autoRunPending: false
+      }]);
+      setActiveTabId(id);
+    };
+    reader.readAsText(file);
+    e.target.value = null;
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%' }}>
       <section className="sql-editor" aria-label="SQL editörü" style={{ display: 'flex', flexDirection: 'column', height: `${editorHeight}px`, flex: 'none', minHeight: 100 }}>
@@ -321,6 +382,10 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
             <button className="new-tab-button" type="button" onClick={addNewTab} title="Yeni sekme aç">+</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <label style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }} title="SQL Dosyası Yükle">
+              <FiUpload /> Dosya Aç
+              <input type="file" accept=".sql,.txt" onChange={handleLoadSql} style={{ display: 'none' }} />
+            </label>
             <button type="button" onClick={saveScript} title="Sorguyu Kaydet" style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}><FiCheck /> Kaydet</button>
             <button type="button" onClick={formatQuery} title="Kodu Düzenle (Format)" style={{ background: 'transparent', border: '1px solid var(--border-muted)', color: 'var(--text-secondary)', borderRadius: '4px', padding: '4px 8px', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}><FiAlignLeft /> Formatla</button>
             <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--text-secondary)', cursor: userRole === 'READ_ONLY' ? 'not-allowed' : 'pointer', opacity: userRole === 'READ_ONLY' ? 0.5 : 1 }}>
@@ -400,7 +465,16 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
           explainError={activeTab.explainError}
           isRunning={activeTab.isRunning} 
           connectionToken={connectionToken}
-            userRole={userRole} 
+          userRole={userRole} 
+          paginationInfo={activeTab.queryResult?.paginationInfo}
+          onPaginationChange={(offset, limit) => {
+              const active = tabs.find(t => t.id === activeTabId);
+              if (active && active.isRunning) {
+                  if (active.queryId && connectionToken) cancelStreamQuery(connectionToken, active.queryId).catch(console.error);
+              }
+              updateTab(activeTabId, { pageOffset: offset, pageSize: limit, autoRunPending: true, isRunning: false });
+          }}
+          onFilterSortChange={handleFilterSortChange}
         />
       </div>
 

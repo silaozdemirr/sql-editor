@@ -206,10 +206,10 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
   };
 
   const handleOpenTableData = (tableName) => {
-    let sql = `SELECT * FROM \`${dbName}\`.\`${tableName}\` LIMIT 1000;`;
-    if (connectionInfo.dbType === 'MSSQL') sql = `SELECT TOP 1000 * FROM [${dbName}].[dbo].[${tableName}];`;
-    else if (connectionInfo.dbType === 'ORACLE') sql = `SELECT * FROM "${dbName}"."${tableName}" FETCH FIRST 1000 ROWS ONLY;`;
-    else if (connectionInfo.dbType === 'POSTGRESQL') sql = `SELECT * FROM "${tableName}" LIMIT 1000;`;
+    let sql = `SELECT * FROM \`${dbName}\`.\`${tableName}\`;`;
+    if (connectionInfo.dbType === 'MSSQL') sql = `SELECT * FROM [${dbName}].[dbo].[${tableName}];`;
+    else if (connectionInfo.dbType === 'ORACLE') sql = `SELECT * FROM "${dbName}"."${tableName}";`;
+    else if (connectionInfo.dbType === 'POSTGRESQL') sql = `SELECT * FROM "${tableName}";`;
     
     if (sqlEditorRef.current) {
       sqlEditorRef.current.openTab(tableName, sql, true);
@@ -302,13 +302,10 @@ function ConnectionNode({ connectionInfo, isActive, onSelect, onDisconnect, sqlE
   }, [connectionInfo.connectionToken]);
 
   useEffect(() => { 
-    if (isExpanded && databases.length === 0 && !error) {
+    if (isExpanded) {
       loadDatabases();
     }
-  }, [isExpanded, databases.length, loadDatabases, error]);
-
-    // Do not reload connection databases on refreshCounter to prevent unmounting DatabaseNodes
-    // Only DatabaseNode should reload its schema (tables and row counts)
+  }, [isExpanded, loadDatabases, refreshCounter]);
 
   const handleDumpDatabase = async (e) => {
     e.stopPropagation();
@@ -424,13 +421,13 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
   const [searchTerm, setSearchTerm] = useState('');
   
   useEffect(() => {
-      window.__triggerSchemaRefresh = () => {
-        setRefreshCounter(c => c + 1);
-      };
-      return () => {
-        if (window.__triggerSchemaRefresh) delete window.__triggerSchemaRefresh;
-      };
-    }, []);
+    const handleRefresh = () => setRefreshCounter(c => c + 1);
+    window.addEventListener('schemaRefresh', handleRefresh);
+    window.__triggerSchemaRefresh = () => window.dispatchEvent(new Event('schemaRefresh'));
+    return () => {
+      window.removeEventListener('schemaRefresh', handleRefresh);
+    };
+  }, []);
 
   const activeConnection = connections.find(c => c.connectionToken === activeToken) || connections[0];
 
