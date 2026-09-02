@@ -147,7 +147,7 @@ export default function ImportDataModal({ tableName, columns, connectionToken, o
                     
                     <div style={{ maxHeight: '300px', overflowY: 'auto', border: '1px solid var(--border-subtle)', borderRadius: '4px' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                            <thead style={{ background: 'var(--bg-layer-2)', position: 'sticky', top: 0 }}>
+                            <thead style={{ background: 'var(--bg-secondary)', position: 'sticky', top: 0 }}>
                                 <tr>
                                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)', fontSize: '13px' }}>Veritabanı Kolonu (Hedef)</th>
                                     <th style={{ padding: '10px', textAlign: 'left', borderBottom: '1px solid var(--border-subtle)', fontSize: '13px' }}>Dosya Kolonu (Kaynak)</th>
@@ -161,7 +161,7 @@ export default function ImportDataModal({ tableName, columns, connectionToken, o
                                             <select 
                                                 value={mapping[dbCol]} 
                                                 onChange={(e) => setMapping({...mapping, [dbCol]: e.target.value})}
-                                                style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid var(--border-muted)', background: 'var(--bg-card)', color: 'var(--text-main)', fontSize: '13px' }}
+                                                style={{ width: '100%', padding: '6px', borderRadius: '4px', border: '1px solid var(--border-muted)', background: 'var(--bg-card)', color: 'var(--text-primary)', fontSize: '13px' }}
                                                 disabled={isImporting}
                                             >
                                                 <option value="">-- Atla (Boş Bırak) --</option>
@@ -182,7 +182,7 @@ export default function ImportDataModal({ tableName, columns, connectionToken, o
                                 <span>İçe Aktarılıyor...</span>
                                 <span>{progress.current} / {progress.total}</span>
                             </div>
-                            <div style={{ width: '100%', height: '8px', background: 'var(--bg-layer-2)', borderRadius: '4px', overflow: 'hidden' }}>
+                            <div style={{ width: '100%', height: '8px', background: 'var(--bg-secondary)', borderRadius: '4px', overflow: 'hidden' }}>
                                 <div style={{ width: `${(progress.current / progress.total) * 100}%`, height: '100%', background: 'var(--accent)', transition: 'width 0.2s' }}></div>
                             </div>
                         </div>

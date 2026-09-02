@@ -55,7 +55,7 @@ const ChartRenderer = ({ data, columns }) => {
               <CartesianGrid strokeDasharray="3 3" opacity={0.1} />
               <XAxis dataKey={xAxis} angle={-45} textAnchor="end" height={80} stroke="var(--text-muted)" />
               <YAxis stroke="var(--text-muted)" />
-              <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-layer-2)', borderColor: 'var(--border-subtle)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+              <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }} itemStyle={{ color: 'var(--text-primary)' }} />
               <Legend />
               <Bar dataKey={yAxis} fill="#3b82f6" name={yAxis} />
             </BarChart>
@@ -64,7 +64,7 @@ const ChartRenderer = ({ data, columns }) => {
               <Pie data={parsedData} dataKey={yAxis} nameKey={xAxis} cx="50%" cy="50%" outerRadius={120} label>
                 {parsedData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
               </Pie>
-              <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-layer-2)', borderColor: 'var(--border-subtle)' }} itemStyle={{ color: 'var(--text-primary)' }} />
+              <RechartsTooltip contentStyle={{ backgroundColor: 'var(--bg-secondary)', borderColor: 'var(--border-subtle)' }} itemStyle={{ color: 'var(--text-primary)' }} />
               <Legend />
             </PieChart>
           )}
@@ -120,6 +120,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
 
   const hasRows = result?.columns?.length > 0;
   
+  const colString = result?.columns?.join(',') || '';
   const resultColDefs = useMemo(() => {
     if (!result?.columns) return [];
     const isEditable = userRole !== "READ_ONLY" && !!result?.tableName;
@@ -153,7 +154,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
       resizable: false
     });
     return cols;
-  }, [result?.columns, result?.tableName, userRole]);
+  }, [colString, result?.tableName, userRole]);
 
   const resultRowData = result?.rows || [];
 
@@ -411,7 +412,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
                     style={{ flex: 1, width: '100%', height: '100%' }}
                   />
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px', background: 'var(--bg-layer-2)', borderTop: '1px solid var(--border-subtle)', gap: '16px', fontSize: '13px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', padding: '8px 16px', background: 'var(--bg-secondary)', borderTop: '1px solid var(--border-subtle)', gap: '16px', fontSize: '13px' }}>
                  {paginationInfo && (
                    <>
                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
