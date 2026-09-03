@@ -514,7 +514,7 @@ export default function SchemaExplorer({ connections, activeToken, onSwitchConne
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: '11px', opacity: 0.7 }}>{connections.length} bağlantı açık</span>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--text-primary)', padding: '2px 6px', background: 'var(--bg-layer-2)', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
-            <FiShield size={12} /> {userRole === 'READ_ONLY' ? 'SADECE OKUMA' : (userRole === 'EDITOR' ? 'EDİTÖR' : 'ADMİN')}
+            <FiShield size={12} /> {userRole === 'READ_ONLY' ? 'READ ONLY' : (userRole === 'EDITOR' ? 'EDITOR' : 'ADMIN')}
           </div>
         </div>
         

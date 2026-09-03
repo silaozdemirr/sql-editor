@@ -14,7 +14,7 @@ public class QueryServiceTest {
     @BeforeEach
     public void setUp() {
         // QueryService'in temel fonksiyonlarını test etmek için bağımlılık olmadan (null) başlatıyoruz.
-        queryService = new QueryService(null); 
+        queryService = new QueryService(null, null); 
     }
 
     @Test

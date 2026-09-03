@@ -42,9 +42,11 @@ public class QueryService {
 
     private static final int MAX_ROWS = 1_000;
     private final JdbcTemplate db;
+    private final MaskingService maskingService;
 
-    public QueryService(JdbcTemplate db) {
+    public QueryService(JdbcTemplate db, MaskingService maskingService) {
         this.db = db;
+        this.maskingService = maskingService;
     }
 
     
@@ -278,6 +280,7 @@ public class QueryService {
         final String finalSql = wrappedSql;
         
         return outputStream -> {
+            java.util.Map<String, String> policies = maskingService.getPoliciesForRole(role);
             try (Statement statement = connection.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY)) {
                 if (queryId != null) activeStatements.put(queryId, statement);
                 
@@ -351,7 +354,17 @@ public class QueryService {
                     while (rs.next()) {
                         java.util.Map<String, Object> row = new java.util.HashMap<>();
                         for (int i = 1; i <= columnCount; i++) {
-                            row.put(cols.get(i - 1), formatValue(rs.getObject(i)));
+                            String colName = cols.get(i - 1);
+                            Object val = formatValue(rs.getObject(i));
+                            
+                            if (policies.containsKey(colName) || policies.containsKey("*")) {
+                                String maskType = policies.get(colName);
+                                if (maskType == null) maskType = policies.get("*");
+                                if (maskType != null) {
+                                    val = maskingService.maskValue(val, maskType);
+                                }
+                            }
+                            row.put(colName, val);
                         }
                         outputStream.write((mapper.writeValueAsString(row) + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8));
                         count++;
@@ -867,6 +880,7 @@ public class QueryService {
         final String finalSql = wrappedSql;
         
         return outputStream -> {
+            java.util.Map<String, String> policies = maskingService.getPoliciesForRole(role);
             try (java.sql.Statement statement = connection.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY)) {
                 if ("MYSQL".equalsIgnoreCase(dbType)) {
                     statement.setFetchSize(Integer.MIN_VALUE);
@@ -890,7 +904,17 @@ public class QueryService {
                     
                     while (rs.next()) {
                         for (int i = 1; i <= colCount; i++) {
+                            String colName = meta.getColumnLabel(i);
                             Object val = rs.getObject(i);
+                            
+                            if (policies.containsKey(colName) || policies.containsKey("*")) {
+                                String maskType = policies.get(colName);
+                                if (maskType == null) maskType = policies.get("*");
+                                if (maskType != null) {
+                                    val = maskingService.maskValue(val, maskType);
+                                }
+                            }
+
                             if (val == null) {
                                 writer.print("");
                             } else {
