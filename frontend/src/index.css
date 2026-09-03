@@ -1063,3 +1063,40 @@ body.light-mode .run-query-button kbd {
   opacity: 0.6;
   cursor: not-allowed;
 }
+/* Form inputs for Modals */
+.modal-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md, 6px);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.modal-input::placeholder {
+  color: var(--text-muted);
+}
+
+.modal-input:hover {
+  border-color: var(--border-muted);
+}
+
+.modal-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.modal-form-group {
+  margin-bottom: 16px;
+}
+
+.modal-form-group label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+}

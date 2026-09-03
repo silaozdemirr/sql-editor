@@ -153,10 +153,12 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
   }, [isActive, isExpanded, schema, onActiveTablesLoaded]);
 
   useEffect(() => {
-    if (isExpanded) {
-      loadSchema();
+    if (isExpanded || searchTerm) {
+      if (!schema && !isLoading) {
+        loadSchema();
+      }
     }
-  }, [isExpanded, refreshCounter, loadSchema]);
+  }, [isExpanded, searchTerm, refreshCounter, loadSchema, schema, isLoading]);
 
   const toggle = (e) => {
     e.stopPropagation();
@@ -220,12 +222,10 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
   const tableMatches = (schema?.tables || []).some(t => t.name.toLowerCase().includes((searchTerm || '').toLowerCase()));
   const viewMatches = (schema?.views || []).some(v => v.name.toLowerCase().includes((searchTerm || '').toLowerCase()));
 
-  if (searchTerm && !dbMatches && !tableMatches && !viewMatches) {
-    return null;
-  }
+  const isHidden = searchTerm && !dbMatches && !tableMatches && !viewMatches && (!isLoading || schema);
 
   return (
-    <>
+    <div style={{ display: isHidden ? 'none' : 'block' }}>
       <div 
         className="tree-row database-row" 
         onClick={toggle}
@@ -276,7 +276,7 @@ function DatabaseNode({ dbName, connectionInfo, isActive, sqlEditorRef, onActive
           </div>
         </div>
       )}
-    </>
+    </div>
   );
 }
 

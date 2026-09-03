@@ -90,7 +90,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
   const onSortChanged = (e) => {
       if (!onFilterSortChange) return;
       const columnState = e.api.getColumnState();
-      const sortModel = columnState.filter(s => s.sort).map(s => ({ colId: s.colId, sort: s.sort }));
+      const sortModel = columnState.filter(s => s.sort).sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0)).map(s => ({ colId: s.colId, sort: s.sort }));
       const sorts = sortModel.map(s => ({ id: s.colId, desc: s.sort === 'desc' }));
       
       const filterModel = e.api.getFilterModel();
@@ -102,7 +102,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
   const onFilterChanged = (e) => {
       if (!onFilterSortChange) return;
       const columnState = e.api.getColumnState();
-      const sortModel = columnState.filter(s => s.sort).map(s => ({ colId: s.colId, sort: s.sort }));
+      const sortModel = columnState.filter(s => s.sort).sort((a, b) => (a.sortIndex ?? 0) - (b.sortIndex ?? 0)).map(s => ({ colId: s.colId, sort: s.sort }));
       const sorts = sortModel.map(s => ({ id: s.colId, desc: s.sort === 'desc' }));
       
       const filterModel = e.api.getFilterModel();
@@ -287,7 +287,8 @@ export default function QueryResults({ result, error, explainResult, explainErro
     sortable: true,
     filter: true,
     resizable: true,
-    minWidth: 100
+    minWidth: 100,
+    sortingOrder: ['asc', 'desc', null]
   }), []);
 
   const loadHistory = async () => {
@@ -363,8 +364,8 @@ export default function QueryResults({ result, error, explainResult, explainErro
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       {activeTab === 'results' && (
         <>
-          {isRunning && <div className="results-state">Sorgu çalıştırılıyor…</div>}
-          {!isRunning && error && (
+          {isRunning && !hasRows && <div className="results-state">Sorgu çalıştırılıyor…</div>}
+          {error && (
             <div className="results-state result-error" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '20px', height: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                 <FiAlertCircle size={20} />
@@ -390,18 +391,20 @@ export default function QueryResults({ result, error, explainResult, explainErro
               </div>
             </div>
           )}
-          {!isRunning && !error && !result && <div className="results-state">Sorgu sonucunuz burada tablo olarak görüntülenecek.</div>}
-          {!isRunning && !error && result && !hasRows && <div className="results-state result-success"><FiCheckCircle /> {result.message}</div>}
-          {!isRunning && !error && hasRows && (
+          {!error && !result && <div className="results-state">Sorgu sonucunuz burada tablo olarak görüntülenecek.</div>}
+          {!error && result && !hasRows && <div className="results-state result-success"><FiCheckCircle /> {result.message}</div>}
+          {!error && hasRows && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               <div className={`results-table-wrap ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
                 <AgGridReact 
                     ref={gridRef}
                     theme="legacy"
-                    rowData={resultRowData} 
+                    rowData={isRunning ? undefined : resultRowData} 
                     columnDefs={resultColDefs} 
                     defaultColDef={defaultColDef} 
                     rowModelType="clientSide"
+                      alwaysMultiSort={true}
+                    
                     pagination={false}
                     rowHeight={35}
                     headerHeight={40}
@@ -487,11 +490,11 @@ export default function QueryResults({ result, error, explainResult, explainErro
       )}
       {activeTab === 'explain' && <div className="results-table-wrap" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
           {isRunning && <div className="results-state" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Açıklama planı çalıştırılıyor…</div>}
-          {!isRunning && explainError && <div className="results-state result-error" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FiAlertCircle /> {explainError}</div>}
-          {!isRunning && !explainError && !explainResult && <div className="results-state" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
+          {explainError && <div className="results-state result-error" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><FiAlertCircle /> {explainError}</div>}
+          {!explainError && !explainResult && <div className="results-state" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#888' }}>
             Henüz bir sorgu çalıştırılmadı.
           </div>}
-          {!isRunning && !explainError && explainResult && <div className={`ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
+          {!explainError && explainResult && <div className={`ag-theme-quartz ${!isLightMode ? 'ag-theme-quartz-dark' : ''}`} style={{ flex: 1, width: '100%', display: 'flex' }}>
             <AgGridReact 
               theme="legacy"
               rowData={explainRowData} 
@@ -507,10 +510,10 @@ export default function QueryResults({ result, error, explainResult, explainErro
       </div>}
       {activeTab === 'chart' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-          {isRunning && <div className="results-state">Sorgu çalıştırılıyor…</div>}
-          {!isRunning && !result && <div className="results-state">Sorgu sonucu bulunamadı.</div>}
-          {!isRunning && result && hasRows && <ChartRenderer data={resultRowData} columns={resultColDefs.map(c => c.field).filter(f => f !== undefined)} />}
-          {!isRunning && result && !hasRows && <div className="results-state">Çizilecek tablo verisi yok.</div>}
+          {isRunning && !hasRows && <div className="results-state">Sorgu çalıştırılıyor…</div>}
+          {!result && <div className="results-state">Sorgu sonucu bulunamadı.</div>}
+          {result && hasRows && <ChartRenderer data={resultRowData} columns={resultColDefs.map(c => c.field).filter(f => f !== undefined)} />}
+          {result && !hasRows && <div className="results-state">Çizilecek tablo verisi yok.</div>}
         </div>
       )}
     </div>
