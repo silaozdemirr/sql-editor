@@ -76,17 +76,16 @@ function SavedScriptsGroup({ onOpenScript, currentDatabase }) {
   const [isOpen, setIsOpen] = useState(false);
   const [scripts, setScripts] = useState([]);
 
-  const loadScripts = () => {
-    const all = JSON.parse(localStorage.getItem('savedScripts') || '[]');
-    const filtered = all.filter(s => s.database === currentDatabase || (!s.database && currentDatabase === 'hastane_db'));
-    setScripts(filtered);
-  };
-
   useEffect(() => {
+    const loadScripts = () => {
+      const all = JSON.parse(localStorage.getItem('savedScripts') || '[]');
+      const filtered = all.filter(s => s.database === currentDatabase);
+      setScripts(filtered);
+    };
     loadScripts();
     window.addEventListener('savedScriptsUpdated', loadScripts);
     return () => window.removeEventListener('savedScriptsUpdated', loadScripts);
-  }, []);
+  }, [currentDatabase]);
 
   const deleteScript = (e, id) => {
     e.stopPropagation();

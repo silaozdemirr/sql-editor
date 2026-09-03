@@ -73,7 +73,7 @@ export default function BackgroundTaskManager() {
   const handleCancelTask = async (taskId) => {
     try {
       await cancelMockDataTask(taskId);
-      setTasks(prev => ({ ...prev, [taskId]: { ...prev[taskId], status: 'CANCELLED', message: 'İptal ediliyor...' }}));
+      setTasks(prev => ({ ...prev, [taskId]: { ...prev[taskId], message: 'İptal ediliyor...' }}));
     } catch (e) {
       console.error(e);
     }

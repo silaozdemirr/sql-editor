@@ -5,6 +5,7 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { FiCode, FiPlay, FiX, FiCheck, FiRotateCcw, FiAlignLeft, FiCpu, FiMessageSquare, FiUpload } from 'react-icons/fi';
 import { format } from 'sql-formatter';
 import { executeQuery, explainQuery, manageTransaction, generateSqlWithAi, executeStreamQuery, cancelStreamQuery } from '../api/queryApi';
+import { getDatabases } from '../api/schemaApi';
 import QueryResults from './QueryResults';
 
 const INITIAL_SQL = ``;
@@ -376,7 +377,7 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
     }
   };
 
-  const saveScript = useCallback(() => {
+  const saveScript = useCallback(async () => {
     const executableSql = activeTab.query.trim();
     if (!executableSql) {
       updateTab(activeTabId, { notice: 'Kaydedilecek sorgu boş.' });
@@ -384,12 +385,32 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
     }
     const name = window.prompt('Bu betik için bir ad girin:');
     if (!name) return;
+    let guessedDb = currentDatabase;
+    const dbMatch = executableSql.match(/(?:from|join|update|into|table)\s+[`'"]?([a-zA-Z0-9_]+)[`'"]?\./i);
+    if (dbMatch && dbMatch[1]) {
+      guessedDb = dbMatch[1];
+    }
+    
+    let targetDb = window.prompt('Hangi veritabanı altına kaydedilsin?', guessedDb);
+    if (targetDb === null) return;
+    
+    try {
+        const validDatabases = await getDatabases(connectionToken);
+        while (validDatabases && validDatabases.length > 0 && !validDatabases.includes(targetDb)) {
+            window.alert(`Hata: '${targetDb}' adında bir veritabanı bulunamadı!\nMevcut veritabanları:\n${validDatabases.join(', ')}`);
+            targetDb = window.prompt('Lütfen geçerli bir veritabanı adı girin:', guessedDb);
+            if (targetDb === null) return;
+        }
+    } catch (e) {
+        console.error("DB listesi alınamadı, doğrulama atlandı.");
+    }
+
     const existing = JSON.parse(localStorage.getItem('savedScripts') || '[]');
-    existing.push({ name, query: executableSql, id: Date.now(), database: currentDatabase });
+    existing.push({ name, query: executableSql, id: Date.now(), database: targetDb });
     localStorage.setItem('savedScripts', JSON.stringify(existing));
     window.dispatchEvent(new Event('savedScriptsUpdated'));
-    updateTab(activeTabId, { notice: `Betik '${name}' olarak kaydedildi.` });
-  }, [activeTab.query, activeTabId, currentDatabase, updateTab]);
+    updateTab(activeTabId, { notice: `Betik '${name}' olarak '${targetDb}' altına kaydedildi.` });
+  }, [activeTab.query, activeTabId, currentDatabase, updateTab, connectionToken]);
 
   const handleLoadSql = (e) => {
     const file = e.target.files[0];

@@ -420,7 +420,7 @@ public class ConnectionService {
     private String buildJdbcUrl(ConnectionRequest request) {
         return switch (request.getDbType().toUpperCase()) {
             case "MYSQL" -> String.format(
-                    "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8&allowMultiQueries=true",
+                    "jdbc:mysql://%s:%d/%s?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul&characterEncoding=UTF-8&allowMultiQueries=true&rewriteBatchedStatements=true",
                     request.getHost(), request.getPort(), request.getDatabase()
             );
             case "POSTGRESQL" -> String.format(

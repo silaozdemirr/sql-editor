@@ -4,7 +4,8 @@ import com.sqleditor.model.ConnectionRequest;
 import com.sqleditor.model.SavedConnectionResponse;
 import com.sqleditor.security.CredentialCipher;
 import com.sqleditor.security.TokenHasher;
-import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import com.zaxxer.hikari.HikariDataSource;
+import com.zaxxer.hikari.HikariConfig;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ public class ConnectionSessionService {
     private final TokenHasher hasher;
     private final int minutes;
     private final SecureRandom random = new SecureRandom();
-    private final ConcurrentMap<String, SingleConnectionDataSource> pools = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, HikariDataSource> pools = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, MongoClient> mongoPools = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, JedisPooled> redisPools = new ConcurrentHashMap<>();
     private final ConcurrentMap<String, CqlSession> cassandraPools = new ConcurrentHashMap<>();
@@ -82,7 +83,7 @@ public class ConnectionSessionService {
                 rs.getString(4), rs.getString(5), rs.getString(6), rs.getString(7)), userId, tokenHash);
         if (rows.isEmpty())
             throw new SecurityException("Bağlantı oturumu bulunamadı veya süresi doldu.");
-        SingleConnectionDataSource pool = pools.computeIfAbsent(tokenHash, ignored -> pool(rows.get(0)));
+        HikariDataSource pool = pools.computeIfAbsent(tokenHash, ignored -> pool(rows.get(0)));
         return pool.getConnection();
     }
 
@@ -290,8 +291,8 @@ public class ConnectionSessionService {
     }
 
     private void closePool(String tokenHash) {
-        SingleConnectionDataSource pool = pools.remove(tokenHash);
-        if (pool != null) pool.destroy();
+        HikariDataSource pool = pools.remove(tokenHash);
+        if (pool != null) pool.close();
         MongoClient mongo = mongoPools.remove(tokenHash);
         if (mongo != null) mongo.close();
         JedisPooled redis = redisPools.remove(tokenHash);
@@ -315,11 +316,15 @@ public class ConnectionSessionService {
         }
     }
 
-    private SingleConnectionDataSource pool(Stored stored) {
+    private HikariDataSource pool(Stored stored) {
         String pass = cipher.decrypt(stored.ciphertext(), stored.iv());
-        SingleConnectionDataSource ds = new SingleConnectionDataSource(url(stored), stored.username(), pass, true);
-        ds.setAutoCommit(true);
-        return ds;
+        HikariConfig config = new HikariConfig();
+        config.setJdbcUrl(url(stored));
+        config.setUsername(stored.username());
+        config.setPassword(pass);
+        config.setMaximumPoolSize(20);
+        config.setAutoCommit(true);
+        return new HikariDataSource(config);
     }
 
     private MongoClient mongoClient(Stored stored) {
