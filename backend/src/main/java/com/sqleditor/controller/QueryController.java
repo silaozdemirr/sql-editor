@@ -220,4 +220,31 @@ public class QueryController {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "İşlem başarısız: " + exception.getMessage(), exception);
         }
     }
+
+    @PostMapping(value = "/exportCsv", produces = "text/csv; charset=UTF-8")
+    public org.springframework.http.ResponseEntity<org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody> exportCsv(
+            @jakarta.validation.Valid @RequestBody com.sqleditor.model.QueryRequest request, 
+            @RequestHeader("X-Connection-Token") String token, 
+            org.springframework.security.core.Authentication auth) {
+        
+        try {
+            String dbType = sessions.getDbType(auth.getName(), token);
+            if (isNoSql(dbType)) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "NoSQL export henuz desteklenmiyor.");
+            }
+            java.sql.Connection connection = sessions.get(auth.getName(), token);
+            String role = auth.getAuthorities().iterator().next().getAuthority();
+            
+            org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody stream = queryService.executeExportCsv(
+                    connection, dbType, request.getSql(), role, request.getFilters(), request.getSorts());
+            
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.add(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"export.csv\"");
+            return org.springframework.http.ResponseEntity.ok()
+                    .headers(headers)
+                    .body(stream);
+        } catch (Exception e) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, e.getMessage(), e);
+        }
+    }
 }

@@ -167,6 +167,44 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
 
   const editorRef = useRef(null);
 
+  const handleExport = async (format) => {
+    const active = tabs.find(t => t.id === activeTabId);
+    if (!active || !active.queryResult) return;
+    
+    try {
+        const payload = {
+            sql: active.query,
+            filters: active.filters || [],
+            sorts: active.sorts || []
+        };
+        
+        const response = await fetch('/api/query/exportCsv', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionStorage.getItem('accessToken')}`,
+                'X-Connection-Token': connectionToken
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        if (!response.ok) throw new Error('Dışa aktarma başarısız.');
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${active.queryResult.tableName || 'export'}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        a.remove();
+    } catch (e) {
+        console.error(e);
+        alert("Dışa aktarma hatası: " + e.message);
+    }
+  };
+
   const handleFilterSortChange = useCallback((filters, sorts) => {
       const active = tabs.find(t => t.id === activeTabId);
       if (active && active.isRunning) {
@@ -475,6 +513,7 @@ const SqlEditor = forwardRef(({ connectionToken, currentDatabase, userRole, dbTy
               updateTab(activeTabId, { pageOffset: offset, pageSize: limit, autoRunPending: true, isRunning: false });
           }}
           onFilterSortChange={handleFilterSortChange}
+            onExport={handleExport}
         />
       </div>
 

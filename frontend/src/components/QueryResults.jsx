@@ -74,7 +74,7 @@ const ChartRenderer = ({ data, columns }) => {
   );
 };
 
-export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken, userRole, onFilterSortChange, paginationInfo, onPaginationChange }) {
+export default function QueryResults({ result, error, explainResult, explainError, isRunning, connectionToken, userRole, onFilterSortChange, paginationInfo, onPaginationChange, onExport }) {
 
 
   const [activeTab, setActiveTab] = useState('results');
@@ -252,8 +252,7 @@ export default function QueryResults({ result, error, explainResult, explainErro
   };
 
   const exportToCsv = () => {
-    if (!gridRef.current || !gridRef.current.api) return;
-    gridRef.current.api.exportDataAsCsv({ fileName: 'sorgu_sonucu.csv' });
+    if (onExport) onExport('csv');
   };
 
   const exportToExcel = async () => {
@@ -349,12 +348,12 @@ export default function QueryResults({ result, error, explainResult, explainErro
                 <FiUpload size={13} />İçe Aktar
               </button>
             )}
-            <button type="button" onClick={exportToCsv} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="CSV olarak kaydet">
-              <FiDownload size={13} />CSV
-            </button>
-            <button type="button" onClick={exportToExcel} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Excel olarak kaydet">
-              <FiDownload size={13} />Excel
-            </button>
+            <button type="button" onClick={exportToCsv} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Tüm Tabloyu İndir (Sınırsız)">
+                <FiDownload size={13} />Tamamını İndir (CSV)
+              </button>
+            <button type="button" onClick={exportToExcel} style={{ padding: '5px 10px', fontSize: '11.5px', display: 'flex', alignItems: 'center', gap: '5px', background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.25)', color: '#10b981', borderRadius: '4px', cursor: 'pointer', fontWeight: 500 }} title="Sadece Ekrandakileri İndir (Excel)">
+                <FiDownload size={13} />Sayfayı İndir (Excel)
+              </button>
           </>
         )}
         {result && <span style={{ color: '#aaa', fontSize: '12px' }}>{result.executionTimeMs} ms</span>}

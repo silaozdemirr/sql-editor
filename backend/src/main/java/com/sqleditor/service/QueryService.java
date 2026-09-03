@@ -815,4 +815,96 @@ public class QueryService {
             throw new RuntimeException("CouchDB hatası: " + e.getMessage());
         }
     }
+
+    public org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody executeExportCsv(
+            java.sql.Connection connection, String dbType, String sql, String role,
+            java.util.List<java.util.Map<String, String>> filters, java.util.List<java.util.Map<String, Object>> sorts) throws java.sql.SQLException {
+        
+        String wrappedSql = sql.trim();
+        if (wrappedSql.endsWith(";")) {
+            wrappedSql = wrappedSql.substring(0, wrappedSql.length() - 1);
+        }
+        
+        String upperSql = wrappedSql.toUpperCase();
+        boolean isSelect = upperSql.startsWith("SELECT") || upperSql.startsWith("WITH");
+        
+        if (isSelect && ((filters != null && !filters.isEmpty()) || (sorts != null && !sorts.isEmpty()))) {
+            StringBuilder sb = new StringBuilder("SELECT * FROM ( ");
+            sb.append(wrappedSql).append(" ) AS t");
+            
+            if (filters != null && !filters.isEmpty()) {
+                sb.append(" WHERE 1=1 ");
+                for (java.util.Map<String, String> f : filters) {
+                    String col = f.get("id");
+                    String val = f.get("value");
+                    String type = f.get("type");
+                    if (col != null && val != null) {
+                        String op = "LIKE";
+                        String prefix = "%";
+                        String suffix = "%";
+                        if ("equals".equalsIgnoreCase(type)) { op = "="; prefix = ""; suffix = ""; }
+                        else if ("notEqual".equalsIgnoreCase(type)) { op = "!="; prefix = ""; suffix = ""; }
+                        else if ("greaterThan".equalsIgnoreCase(type)) { op = ">"; prefix = ""; suffix = ""; }
+                        else if ("lessThan".equalsIgnoreCase(type)) { op = "<"; prefix = ""; suffix = ""; }
+                        sb.append(" AND " + col.replace("", "`") + " " + op + " '" + prefix + val.replace("'", "''") + suffix + "'");
+                    }
+                }
+            }
+            if (sorts != null && !sorts.isEmpty()) {
+                sb.append(" ORDER BY ");
+                boolean first = true;
+                for (java.util.Map<String, Object> s : sorts) {
+                    if (!first) sb.append(", ");
+                    String col = (String) s.get("id");
+                    boolean desc = Boolean.parseBoolean(String.valueOf(s.get("desc")));
+                    sb.append("" + col.replace("", "`") + " " + (desc ? "DESC" : "ASC"));
+                    first = false;
+                }
+            }
+            wrappedSql = sb.toString();
+        }
+
+        final String finalSql = wrappedSql;
+        
+        return outputStream -> {
+            try (java.sql.Statement statement = connection.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY)) {
+                if ("MYSQL".equalsIgnoreCase(dbType)) {
+                    statement.setFetchSize(Integer.MIN_VALUE);
+                } else {
+                    statement.setFetchSize(1000);
+                }
+                
+                try (java.sql.ResultSet rs = statement.executeQuery(finalSql)) {
+                    java.sql.ResultSetMetaData meta = rs.getMetaData();
+                    int colCount = meta.getColumnCount();
+                    java.io.PrintWriter writer = new java.io.PrintWriter(new java.io.OutputStreamWriter(outputStream, java.nio.charset.StandardCharsets.UTF_8));
+                    
+                    writer.write('\ufeff');
+                    
+                    for (int i = 1; i <= colCount; i++) {
+                        String colName = meta.getColumnLabel(i);
+                        writer.print("\"" + colName.replace("\"", "\"\"") + "\"");
+                        if (i < colCount) writer.print(",");
+                    }
+                    writer.println();
+                    
+                    while (rs.next()) {
+                        for (int i = 1; i <= colCount; i++) {
+                            Object val = rs.getObject(i);
+                            if (val == null) {
+                                writer.print("");
+                            } else {
+                                writer.print("\"" + val.toString().replace("\"", "\"\"") + "\"");
+                            }
+                            if (i < colCount) writer.print(",");
+                        }
+                        writer.println();
+                    }
+                    writer.flush();
+                }
+            } catch (java.sql.SQLException e) {
+                e.printStackTrace();
+            }
+        };
+    }
 }
