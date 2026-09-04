@@ -1,149 +1,54 @@
-# SQLEditör 🗃️⚡
+# SQLEditor 🚀
 
-> Kendi DBeaver'ın — Türk Okul Sistemi Veritabanı ile
+**Modern, Web Tabanlı, Yapay Zeka Destekli Veritabanı Yönetim Aracı**
 
-## Proje Yapısı
+SQLEditor, veritabanlarınıza web tarayıcınız üzerinden güvenle bağlanmanızı, verilerinizi yönetmenizi ve analiz etmenizi sağlayan gelişmiş bir platformdur. Geleneksel masaüstü araçlarının (örn: DBeaver, DataGrip) gücünü modern web teknolojileri, hız ve yapay zeka ile birleştirir.
 
-```
-SQLeditör/
-├── docker/
-│   ├── docker-compose.yml    ← MySQL container
-│   └── mysql/
-│       └── init.sql          ← Okul veritabanı + 50 öğrenci verisi
-├── backend/                  ← Spring Boot (Java 21)
-│   ├── pom.xml
-│   ├── mvnw.cmd              ← Maven wrapper (Maven kurmana gerek yok!)
-│   └── src/main/java/com/sqleditor/
-│       ├── SqlEditorApplication.java
-│       ├── controller/ConnectionController.java
-│       ├── service/ConnectionService.java
-│       └── model/
-│           ├── ConnectionRequest.java
-│           └── ConnectionResponse.java
-└── frontend/                 ← React + Vite
-    └── src/
-        ├── api/connectionApi.js
-        ├── components/ConnectionPanel.jsx
-        ├── App.jsx
-        └── index.css
-```
+## 🌟 Öne Çıkan Özellikler
 
----
+- **Gelişmiş SQL Editörü:** Çoklu sekme desteği, sözdizimi vurgulama (syntax highlighting), otomatik kod formatlama ve klavye kısayolları.
+- **Canlı Veri Akışı (Streaming Results):** Devasa (milyonlarca satırlık) sorgu sonuçlarını sunucu belleğini şişirmeden veya tarayıcıyı dondurmadan (Chunk-based NDJSON akışı ile) anında ekrana basma.
+- **Yapay Zeka SQL Asistanı:** Sadece ne yapmak istediğinizi söyleyin (Örn: *"En yüksek maaş alan 5 personeli getir"*), gerisini AI halletsin.
+- **Dinamik Veri Maskeleme (Data Masking):** Rol tabanlı sıkı güvenlik (Admin, Editor, Read-Only). TC Kimlik, Kredi Kartı, IBAN ve iletişim bilgilerini yetkisiz rollerden anında maskeleme.
+- **Devasa Test Verisi Üretimi (Mock Data):** Tablo yapınızı otomatik analiz edip saniyeler içinde milyonlarca satır sahte veriyi, çoklu çekirdek (Multi-threading) mimarisiyle veritabanına enjekte etme.
+- **Anında Veri Görselleştirme:** SQL sonuçlarınızı tek tıkla interaktif Pasta (Pie) veya Sütun (Bar) grafiklerine dönüştürün.
+- **Görsel ERD (Entity-Relationship) Şeması:** Veritabanınızın tabloları ve aralarındaki yabancı anahtar (Foreign Key) ilişkilerini otomatik olarak şemalaştırın.
+- **İçe ve Dışa Aktarım:** Sınırsız Excel/CSV veri dışa aktarımı ve dosya yükleyerek mevcut tablolara hızlı veri aktarımı (Import/Export).
+- **İşlem Yönetimi (Transactions):** Auto-commit modunu kapatarak güvenle Commit ve Rollback yapabilme, satır içi veri ekleme ve silme.
+- **Kayıtlı Sorgular ve Geçmiş:** Her veritabanı için kendi betiklerinizi saklayın, çalıştırma geçmişinize detaylıca göz atın.
 
-## 🚀 Nasıl Çalıştırılır?
+## 🏗️ Teknoloji Yığını
 
-### 1️⃣ MySQL'i Docker ile Başlat
+- **Frontend:** React.js, Vite, AG Grid (Yüksek performanslı veri tabloları), Recharts, CodeMirror, Mermaid.js
+- **Backend:** Java 21, Spring Boot 3, Spring Security (JWT Auth), HikariCP (Connection Pooling), JDBC Streaming
+- **Altyapı:** MySQL, Docker
 
-```bash
-cd SQLeditör/docker
+## 🚀 Hızlı Kurulum ve Çalıştırma
+
+Projeyi lokalinizde saniyeler içinde ayağa kaldırabilirsiniz.
+
+### 1. Docker ile Uygulama Veritabanını Başlatın
+Uygulamanın kendi kayıtlarını (kullanıcılar, kayıtlı şifreler, maskeleme kuralları) tutacağı ana veritabanını başlatın:
+`ash
+cd docker
 docker compose up -d
-```
+`
 
-Kontrol et: `docker ps` → `sqleditor-mysql` çalışıyor olmalı
+### 2. Spring Boot Backend'i Çalıştırın
+`ash
+cd backend
+./mvnw.cmd spring-boot:run
+`
+*(Mac/Linux için ./mvnw spring-boot:run kullanınız)*
 
----
-
-### 2️⃣ Spring Boot Backend'i Başlat
-
-```bash
-cd SQLeditör/backend
-.\mvnw.cmd spring-boot:run
-```
-
-PowerShell'de AES anahtarı üretmek için:
-
-```powershell
-[Convert]::ToBase64String((1..32 | ForEach-Object { Get-Random -Maximum 256 }))
-```
-
-İlk Docker kurulumundan önce `docker compose up -d` çalıştırılırsa uygulama veritabanı (`sqleditor_app`) otomatik oluşur. Mevcut MySQL volume'ü olan kurulumda bu veritabanını bir kez oluşturmak için `docker/mysql/init.sql` içindeki ilk dört SQL satırını MySQL üzerinde çalıştırın; mevcut `okul_db` veriniz silinmez.
-
-Test: http://localhost:8080/api/connection/health
-
----
-
-### 3️⃣ React Frontend'i Başlat
-
-```bash
-cd SQLeditör/frontend
+### 3. React Frontend'i Çalıştırın
+`ash
+cd frontend
+npm install
 npm run dev
-```
+`
 
-Aç: http://localhost:5173
+🎉 **Hepsi bu kadar!** Tarayıcınızda [http://localhost:5173](http://localhost:5173) adresine giderek uygulamaya giriş yapabilirsiniz.
 
----
-
-## 📡 API Endpoints
-
-| Method | URL | Açıklama |
-|--------|-----|---------|
-| GET | `/api/connection/health` | Backend durumu |
-| POST | `/api/connection/test` | Bağlantı testi |
-| POST | `/api/connection/connect` | Bağlantı kur |
-| POST | `/api/auth/register` | Kullanıcı kaydı |
-| POST | `/api/auth/login` | Giriş |
-| POST | `/api/auth/logout` | Çıkış |
-| GET | `/api/connections` | Giriş yapan kullanıcının bağlantı geçmişi |
-
-Tüm bağlantı, şema ve sorgu uçları `Authorization: Bearer <access-token>` ister. Bağlantı tokenı yalnızca `X-Connection-Token` başlığında gönderilir.
-
-### Örnek Request
-```json
-POST /api/connection/test
-{
-  "host": "localhost",
-  "port": 3306,
-  "database": "okul_db",
-  "username": "sqleditor",
-  "password": "sqleditor123",
-  "dbType": "MYSQL"
-}
-```
-
----
-
-## 🗄️ Veritabanı Tabloları
-
-| Tablo | Açıklama |
-|-------|---------|
-| `okullar` | 10 Türk okulu (devlet, özel, vakıf) |
-| `bolumler` | 13 bölüm |
-| `ogretmenler` | 10 öğretmen |
-| `ogrenciler` | 50 öğrenci (ad, soyad, no, bölüm, ortalama...) |
-| `dersler` | 15 ders |
-| `ogrenci_dersler` | Öğrenci-ders kayıtları |
-| `v_ogrenci_ozet` | Özet view |
-
----
-
-## 🗓️ Aşamalar
-
-- [x] **Aşama 1** — Database Connection
-- [x] **Aşama 2** — Schema Explorer (sol panel, tablo ağacı)
-- [x] **Aşama 3** — SQL Editor (CodeMirror)
-- [x] **Aşama 4** — Query Results (tablo görünümü)
-- [ ] **Aşama 5** — PostgreSQL, MSSQL desteği
-
----
-
-## ⚠️ Sorun Giderme
-
-**MySQL bağlantı hatası:**
-```bash
-docker logs sqleditor-mysql
-docker compose down -v && docker compose up -d  # Sıfırdan başlat
-```
-
-**Backend başlamıyor:**
-- Java 21+ kurulu olduğundan emin ol: `java -version`
-- Port 8080 başka program tarafından kullanılıyor olabilir
-
-**Frontend CORS hatası:**
-- `vite.config.js` proxy yapılandırması devreye alıyor, sorun olmamalı
-
-
-## 💡 Önemli İpuçları (Tips)
-
-*   **Veritabanı (Şema) Belirtme Zorunluluğu:** MySQL ve benzeri veritabanlarında sorgu yazarken, eğer bağlandığınız anda varsayılan bir veritabanı ismi (database) belirtmediyseniz veya farklı bir veritabanındaki tabloya erişmek istiyorsanız; sorgularınızda tablo adından önce mutlaka veritabanı adını kullanmalısınız. Aksi takdirde sistem tablonun nerede olduğunu bilemez ve sizden veritabanı adını ister.
-    *   ❌ **Yanlış:** `SELECT * FROM ogrenciler;` (Eğer varsayılan db seçilmediyse)
-    *   ✅ **Doğru:** `SELECT * FROM okul_db.ogrenciler;`
+## 🔒 Güvenlik Notu
+Uygulama, bağlandığınız dış veritabanlarının parolalarını AES-256 algoritması ile şifreleyerek kendi veritabanında (sqleditor_app) saklar. Token tabanlı (JWT) mimarisi ile her sorgu oturumu sıkı güvenlik denetimlerinden geçer.
